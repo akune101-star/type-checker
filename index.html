@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>タイプ相性チェッカー - くまらぼ</title>
+<meta name="description" content="モンスターの相性をチェックして、バトルを有利に進めよう！名前検索と複合タイプ計算で弱点が一発でわかる。">
+<link rel="icon" type="image/png" href="./images/favicon.png">
+<style>
+  :root {
+    --accent: #7c5cff;
+    --accent-soft: #ede9ff;
+    --bg: #f7f6fb;
+    --card: #ffffff;
+    --text: #2a2a3a;
+    --text-sub: #8a8aa0;
+    --border: #ececf5;
+    --shadow: 0 2px 12px rgba(40, 30, 90, 0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    color: var(--text);
+    line-height: 1.5;
+    padding: 20px 18px 100px;
+    max-width: 640px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+
+  /* ===== ヘッダー（横長ロゴ画像対応） ===== */
+  .header-logo {
+    width: 100%; max-width: 480px;
+    display: block; margin: 0 auto 8px;
+  }
+  .subtitle {
+    font-size: 13px; color: var(--text-sub);
+    text-align: center; margin-bottom: 20px;
+  }
+
+  /* ===== カード共通 ===== */
+  .card {
+    background: var(--card); border-radius: 16px; padding: 18px;
+    box-shadow: var(--shadow); margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 15px; font-weight: 700;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  }
+  .card-title .icon {
+    width: 22px; height: 22px; color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ===== 検索ボックス ===== */
+  .search-wrap { position: relative; }
+  .search-box {
+    width: 100%; padding: 13px 40px 13px 40px;
+    font-size: 15px; color: var(--text);
+    border: 2px solid var(--accent-soft);
+    border-radius: 12px; background: white;
+    transition: border-color 0.15s;
+  }
+  .search-box:focus { outline: none; border-color: var(--accent); }
+  .search-icon {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--text-sub); pointer-events: none;
+  }
+  .clear-btn {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #d0d0dc; color: white; border: none; cursor: pointer;
+    display: none; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .clear-btn.show { display: flex; }
+
+  /* ===== サジェスト ===== */
+  .suggestions {
+    background: white; border-radius: 12px;
+    margin-top: 8px; max-height: 280px; overflow-y: auto;
+    border: 1px solid var(--border); display: none;
+  }
+  .suggestions.show { display: block; }
+  .suggest-item {
+    padding: 10px 14px; cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid #f5f5fa;
+  }
+  .suggest-item:last-child { border: none; }
+  .suggest-item:active { background: var(--accent-soft); }
+  .suggest-no { color: var(--text-sub); font-size: 11px; min-width: 42px; font-weight: 600; }
+  .suggest-name { flex: 1; font-weight: 600; font-size: 14px; }
+  .suggest-types { display: flex; gap: 4px; }
+  .no-result { padding: 16px; color: var(--text-sub); text-align: center; font-size: 13px; }
+
+  .selected-tags { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+  /* ===== タイプ選択グリッド ===== */
+  .type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .type-btn {
+    position: relative;
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    background: var(--bg);
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.15s;
+    font-family: inherit;
+  }
+  .type-btn:active { transform: scale(0.97); }
+  .type-btn.selected { border-color: var(--accent); background: white; }
+  .type-btn.selected::after {
+    content: ''; position: absolute; top: -6px; right: -6px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'><path d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z'/></svg>");
+    background-size: 14px; background-repeat: no-repeat; background-position: center;
+  }
+  .type-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+  .type-icon {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .type-icon svg { width: 18px; height: 18px; }
+  .type-label { font-size: 14px; font-weight: 700; color: var(--text); }
+
+  /* ===== タイプタグ ===== */
+  .type-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 11px 5px 5px;
+    border-radius: 999px;
+    font-size: 12px; font-weight: 700; color: white;
+  }
+  .type-tag .type-icon-mini {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .type-tag .type-icon-mini svg { width: 11px; height: 11px; }
+  .mini-tag {
+    padding: 2px 9px; border-radius: 10px; color: white;
+    font-size: 10px; font-weight: 700;
+  }
+
+  /* ===== 注意書きバナー ===== */
+  .info-banner {
+    background: var(--accent-soft); color: #5b46c4;
+    padding: 12px 14px; border-radius: 12px;
+    font-size: 12px; line-height: 1.6;
+    margin-bottom: 16px;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .info-banner .info-icon {
+    flex-shrink: 0; width: 18px; height: 18px;
+    border-radius: 50%; border: 1.5px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+
+  /* ===== 結果カード ===== */
+  .result-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .result-card {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+    background: #f0f0f5;
+  }
+  .result-card-image {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .result-card-fallback {
+    position: absolute; inset: 0;
+    display: none; align-items: center; justify-content: center;
+    background: var(--fallback-bg, #888);
+  }
+  .result-card-fallback svg { width: 50%; height: 50%; opacity: 0.7; }
+
+  .result-card-overlay {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0) 100%);
+    padding: 16px 8px 10px;
+    text-align: center; color: white;
+  }
+  .result-card-name {
+    font-size: 14px; font-weight: 800;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6); line-height: 1.2;
+  }
+  .result-card-mult {
+    font-size: 20px; font-weight: 900;
+    letter-spacing: 0.02em;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+    margin-top: 2px; line-height: 1;
+  }
+  .result-card-badge {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--badge-bg, #fff);
+    color: var(--badge-color, #333);
+    font-size: 10px; font-weight: 800;
+    padding: 4px 8px; border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    letter-spacing: 0.02em;
+  }
+  .result-card.quad::before {
+    content: '🔥';
+    position: absolute; top: 6px; left: 6px;
+    font-size: 20px;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+    z-index: 2;
+  }
+  .result-card.zero .result-card-image {
+    filter: grayscale(0.8) brightness(0.55);
+  }
+  .result-card.zero::before {
+    content: '🚫';
+    position: absolute; top: 6px; left: 6px;
+    font-size: 20px; z-index: 2;
+  }
+
+  .tip-banner {
+    background: #fff8e0; color: #8a6e10;
+    padding: 10px 14px; border-radius: 10px;
+    font-size: 12px; margin-top: 12px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .tip-banner.shield { background: #e3f0ff; color: #2856a0; }
+  .tip-banner.block { background: #efeaf8; color: #4a3a70; }
+  .empty-state {
+    text-align: center; padding: 24px 16px;
+    color: var(--text-sub); font-size: 13px;
+  }
+
+  /* ボトムナビ */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: white;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-around;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    max-width: 640px; margin: 0 auto;
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 2px; padding: 4px 12px; cursor: pointer;
+    color: var(--text-sub);
+    font-size: 10px; font-weight: 600;
+  }
+  .nav-item.active { color: var(--accent); }
+  .nav-item svg { width: 22px; height: 22px; }
+
+  footer.credit {
+    text-align: center; font-size: 11px; color: var(--text-sub);
+    margin-top: 24px; padding: 12px;
+  }
+  footer.credit a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- ヘッダーロゴ（横長画像） -->
+<img src="./images/logo.png" alt="タイプ相性チェッカー" class="header-logo">
+<p class="subtitle">タイプの相性をチェックして、バトルを有利に進めよう！</p>
+
+<!-- 名前検索カード -->
+<div class="card">
+  <div class="card-title">
+    <span class="icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/>
+      </svg>
+    </span>
+    名前で検索
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/>
+      </svg>
+    </span>
+    <input type="text" id="searchBox" class="search-box"
+           placeholder="ぴかちゅう / ガブリアス / 025"
+           autocomplete="off">
+    <button class="clear-btn" id="clearBtn" aria-label="クリア">×</button>
+  </div>
+  <div class="suggestions" id="suggestions"></div>
+  <div class="selected-tags" id="selectedTags"></div>
+</div>
+
+<!-- タイプ選択カード -->
+<div class="card">
+  <div class="card-title">
+    <span class="icon">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/>
+        <circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/>
+      </svg>
+    </span>
+    タイプから選ぶ（最大2つ）
+  </div>
+  <div class="type-grid" id="typeGrid"></div>
+</div>
+
+<!-- 結果表示エリア -->
+<div id="resultsWrap"></div>
+
+<nav class="bottom-nav">
+  <div class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 4 9v12h5v-7h6v7h5V9z"/></svg>
+    ホーム
+  </div>
+  <div class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    検索
+  </div>
+  <div class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h7v16H4zM13 4h7v16h-7z"/></svg>
+    タイプ一覧
+  </div>
+  <div class="nav-item">
+    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="13" width="4" height="8"/><rect x="10" y="8" width="4" height="13"/><rect x="17" y="3" width="4" height="18"/></svg>
+    相性表
+  </div>
+  <div class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    その他
+  </div>
+</nav>
+
+<footer class="credit">
+  © くまらぼ · <a href="https://kumalabos.com">kumalabos.com</a>
+</footer>
+
+<script>
+const IMAGE_PATH = './images/';
+const IMAGE_EXT = '.png';
+
+const types = {
+  normal:   { name: "ノーマル",   color: "#A8A878", soft: "#f0efe5" },
+  fire:     { name: "ほのお",     color: "#F08030", soft: "#fde4d4" },
+  water:    { name: "みず",       color: "#6890F0", soft: "#dce6fb" },
+  electric: { name: "でんき",     color: "#F8D030", soft: "#fdf2c6" },
+  grass:    { name: "くさ",       color: "#78C850", soft: "#dff0d2" },
+  ice:      { name: "こおり",     color: "#98D8D8", soft: "#dff1f1" },
+  fighting: { name: "かくとう",   color: "#C03028", soft: "#f0d4d1" },
+  poison:   { name: "どく",       color: "#A040A0", soft: "#e8d4e8" },
+  ground:   { name: "じめん",     color: "#E0C068", soft: "#f5ead0" },
+  flying:   { name: "ひこう",     color: "#A890F0", soft: "#e3dcf9" },
+  psychic:  { name: "エスパー",   color: "#F85888", soft: "#fdd6e1" },
+  bug:      { name: "むし",       color: "#A8B820", soft: "#e7eac4" },
+  rock:     { name: "いわ",       color: "#B8A038", soft: "#ebe1c5" },
+  ghost:    { name: "ゴースト",   color: "#705898", soft: "#dcd4e5" },
+  dragon:   { name: "ドラゴン",   color: "#7038F8", soft: "#d9ccfc" },
+  dark:     { name: "あく",       color: "#705848", soft: "#dad2cd" },
+  steel:    { name: "はがね",     color: "#B8B8D0", soft: "#e8e8ef" },
+  fairy:    { name: "フェアリー", color: "#EE99AC", soft: "#fbe1e7" }
+};
+
+const typeIcons = {
+  normal:   '<svg viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5"/></svg>',
+  fire:     '<svg viewBox="0 0 24 24" fill="white"><path d="M12 2c1 4 4 6 4 10a4 4 0 1 1-8 0c0-2 1-3 2-4-.5 2 .5 3 2 3 0-3-2-4 0-9z"/></svg>',
+  water:    '<svg viewBox="0 0 24 24" fill="white"><path d="M12 3c-3 5-6 8-6 12a6 6 0 1 0 12 0c0-4-3-7-6-12z"/></svg>',
+  electric: '<svg viewBox="0 0 24 24" fill="white"><path d="M13 2 6 13h5l-2 9 7-11h-5z"/></svg>',
+  grass:    '<svg viewBox="0 0 24 24" fill="white"><path d="M12 3c-5 3-7 7-7 11 0 0 3-2 7-2s7 2 7 2c0-4-2-8-7-11z"/></svg>',
+  ice:      '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v20M4 7l16 10M4 17 20 7"/></svg>',
+  fighting: '<svg viewBox="0 0 24 24" fill="white"><path d="M6 10v4l4 2v3h4v-3l4-2v-4l-3-1V6l-3-2-3 2v3z"/></svg>',
+  poison:   '<svg viewBox="0 0 24 24" fill="white"><circle cx="9" cy="10" r="4"/><circle cx="16" cy="14" r="3"/></svg>',
+  ground:   '<svg viewBox="0 0 24 24" fill="white"><path d="M3 12c3-1 6-1 9 0s6 1 9 0v3c-3 1-6 1-9 0s-6-1-9 0z"/><path d="M3 17c3-1 6-1 9 0s6 1 9 0v3c-3 1-6 1-9 0s-6-1-9 0z"/></svg>',
+  flying:   '<svg viewBox="0 0 24 24" fill="white"><path d="M3 12c4-6 10-7 18-2-6-1-12 1-18 2z"/></svg>',
+  psychic:  '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="white"/><circle cx="12" cy="12" r="7" stroke="white" stroke-width="2"/></svg>',
+  bug:      '<svg viewBox="0 0 24 24" fill="white"><ellipse cx="12" cy="13" rx="4" ry="6"/><circle cx="12" cy="6" r="2.5"/></svg>',
+  rock:     '<svg viewBox="0 0 24 24" fill="white"><path d="M4 18 8 8l4 3 4-5 4 12z"/></svg>',
+  ghost:    '<svg viewBox="0 0 24 24" fill="white"><path d="M6 11a6 6 0 0 1 12 0v9l-3-2-3 2-3-2-3 2z"/></svg>',
+  dragon:   '<svg viewBox="0 0 24 24" fill="white"><path d="M3 12c3-4 8-4 11-1l5-3-2 5c2 3 1 7-2 9-4 2-9 0-12-4z"/></svg>',
+  dark:     '<svg viewBox="0 0 24 24" fill="white"><path d="M16 4a8 8 0 1 0 4 12 6 6 0 0 1-4-12z"/></svg>',
+  steel:    '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 3 4 8v8l8 5 8-5V8z"/></svg>',
+  fairy:    '<svg viewBox="0 0 24 24" fill="white"><path d="M12 3 14 10 21 12 14 14 12 21 10 14 3 12 10 10z"/></svg>'
+};
+
+const chart = {
+  normal:   { rock:0.5, ghost:0, steel:0.5 },
+  fire:     { fire:0.5, water:0.5, grass:2, ice:2, bug:2, rock:0.5, dragon:0.5, steel:2 },
+  water:    { fire:2, water:0.5, grass:0.5, ground:2, rock:2, dragon:0.5 },
+  electric: { water:2, electric:0.5, grass:0.5, ground:0, flying:2, dragon:0.5 },
+  grass:    { fire:0.5, water:2, grass:0.5, poison:0.5, ground:2, flying:0.5, bug:0.5, rock:2, dragon:0.5, steel:0.5 },
+  ice:      { fire:0.5, water:0.5, grass:2, ice:0.5, ground:2, flying:2, dragon:2, steel:0.5 },
+  fighting: { normal:2, ice:2, rock:2, dark:2, steel:2, poison:0.5, flying:0.5, psychic:0.5, bug:0.5, ghost:0, fairy:0.5 },
+  poison:   { grass:2, fairy:2, poison:0.5, ground:0.5, rock:0.5, ghost:0.5, steel:0 },
+  ground:   { fire:2, electric:2, poison:2, rock:2, steel:2, grass:0.5, bug:0.5, flying:0 },
+  flying:   { grass:2, fighting:2, bug:2, electric:0.5, rock:0.5, steel:0.5 },
+  psychic:  { fighting:2, poison:2, psychic:0.5, dark:0, steel:0.5 },
+  bug:      { grass:2, psychic:2, dark:2, fire:0.5, fighting:0.5, poison:0.5, flying:0.5, ghost:0.5, steel:0.5, fairy:0.5 },
+  rock:     { fire:2, ice:2, flying:2, bug:2, fighting:0.5, ground:0.5, steel:0.5 },
+  ghost:    { psychic:2, ghost:2, dark:0.5, normal:0 },
+  dragon:   { dragon:2, steel:0.5, fairy:0 },
+  dark:     { psychic:2, ghost:2, fighting:0.5, dark:0.5, fairy:0.5 },
+  steel:    { ice:2, rock:2, fairy:2, fire:0.5, water:0.5, electric:0.5, steel:0.5 },
+  fairy:    { fighting:2, dragon:2, dark:2, fire:0.5, poison:0.5, steel:0.5 }
+};
+
+// ============================================
+// 全1025匹のデータ（PokéAPIから取得）
+// 形式: [図鑑番号, 日本語名, ひらがな, 英語名, タイプ1, タイプ2]
+// ============================================
+const pokemons = [
+  [1,"フシギダネ","ふしぎだね","bulbasaur","grass","poison"],
+  [2,"フシギソウ","ふしぎそう","ivysaur","grass","poison"],
+  [3,"フシギバナ","ふしぎばな","venusaur","grass","poison"],
+  [4,"ヒトカゲ","ひとかげ","charmander","fire",null],
+  [5,"リザード","りざーど","charmeleon","fire",null],
+  [6,"リザードン","りざーどん","charizard","fire","flying"],
+  [7,"ゼニガメ","ぜにがめ","squirtle","water",null],
+  [8,"カメール","かめーる","wartortle","water",null],
+  [9,"カメックス","かめっくす","blastoise","water",null],
+  [10,"キャタピー","きゃたぴー","caterpie","bug",null],
+  [11,"トランセル","とらんせる","metapod","bug",null],
+  [12,"バタフリー","ばたふりー","butterfree","bug","flying"],
+  [13,"ビードル","びーどる","weedle","bug","poison"],
+  [14,"コクーン","こくーん","kakuna","bug","poison"],
+  [15,"スピアー","すぴあー","beedrill","bug","poison"],
+  [16,"ポッポ","ぽっぽ","pidgey","normal","flying"],
+  [17,"ピジョン","ぴじょん","pidgeotto","normal","flying"],
+  [18,"ピジョット","ぴじょっと","pidgeot","normal","flying"],
+  [19,"コラッタ","こらった","rattata","normal",null],
+  [20,"ラッタ","らった","raticate","normal",null],
+  [21,"オニスズメ","おにすずめ","spearow","normal","flying"],
+  [22,"オニドリル","おにどりる","fearow","normal","flying"],
+  [23,"アーボ","あーぼ","ekans","poison",null],
+  [24,"アーボック","あーぼっく","arbok","poison",null],
+  [25,"ピカチュウ","ぴかちゅう","pikachu","electric",null],
+  [26,"ライチュウ","らいちゅう","raichu","electric",null],
+  [27,"サンド","さんど","sandshrew","ground",null],
+  [28,"サンドパン","さんどぱん","sandslash","ground",null],
+  [29,"ニドラン♀","にどらん♀","nidoran-f","poison",null],
+  [30,"ニドリーナ","にどりーな","nidorina","poison",null],
+  [31,"ニドクイン","にどくいん","nidoqueen","poison","ground"],
+  [32,"ニドラン♂","にどらん♂","nidoran-m","poison",null],
+  [33,"ニドリーノ","にどりーの","nidorino","poison",null],
+  [34,"ニドキング","にどきんぐ","nidoking","poison","ground"],
+  [35,"ピッピ","ぴっぴ","clefairy","fairy",null],
+  [36,"ピクシー","ぴくしー","clefable","fairy",null],
+  [37,"ロコン","ろこん","vulpix","fire",null],
+  [38,"キュウコン","きゅうこん","ninetales","fire",null],
+  [39,"プリン","ぷりん","jigglypuff","normal","fairy"],
+  [40,"プクリン","ぷくりん","wigglytuff","normal","fairy"],
+  [41,"ズバット","ずばっと","zubat","poison","flying"],
+  [42,"ゴルバット","ごるばっと","golbat","poison","flying"],
+  [43,"ナゾノクサ","なぞのくさ","oddish","grass","poison"],
+  [44,"クサイハナ","くさいはな","gloom","grass","poison"],
+  [45,"ラフレシア","らふれしあ","vileplume","grass","poison"],
+  [46,"パラス","ぱらす","paras","bug","grass"],
+  [47,"パラセクト","ぱらせくと","parasect","bug","grass"],
+  [48,"コンパン","こんぱん","venonat","bug","poison"],
+  [49,"モルフォン","もるふぉん","venomoth","bug","poison"],
+  [50,"ディグダ","でぃぐだ","diglett","ground",null],
+  [51,"ダグトリオ","だぐとりお","dugtrio","ground",null],
+  [52,"ニャース","にゃーす","meowth","normal",null],
+  [53,"ペルシアン","ぺるしあん","persian","normal",null],
+  [54,"コダック","こだっく","psyduck","water",null],
+  [55,"ゴルダック","ごるだっく","golduck","water",null],
+  [56,"マンキー","まんきー","mankey","fighting",null],
+  [57,"オコリザル","おこりざる","primeape","fighting",null],
+  [58,"ガーディ","がーでぃ","growlithe","fire",null],
+  [59,"ウインディ","ういんでぃ","arcanine","fire",null],
+  [60,"ニョロモ","にょろも","poliwag","water",null],
+  [61,"ニョロゾ","にょろぞ","poliwhirl","water",null],
+  [62,"ニョロボン","にょろぼん","poliwrath","water","fighting"],
+  [63,"ケーシィ","けーしぃ","abra","psychic",null],
+  [64,"ユンゲラー","ゆんげらー","kadabra","psychic",null],
+  [65,"フーディン","ふーでぃん","alakazam","psychic",null],
+  [66,"ワンリキー","わんりきー","machop","fighting",null],
+  [67,"ゴーリキー","ごーりきー","machoke","fighting",null],
+  [68,"カイリキー","かいりきー","machamp","fighting",null],
+  [69,"マダツボミ","まだつぼみ","bellsprout","grass","poison"],
+  [70,"ウツドン","うつどん","weepinbell","grass","poison"],
+  [71,"ウツボット","うつぼっと","victreebel","grass","poison"],
+  [72,"メノクラゲ","めのくらげ","tentacool","water","poison"],
+  [73,"ドククラゲ","どくくらげ","tentacruel","water","poison"],
+  [74,"イシツブテ","いしつぶて","geodude","rock","ground"],
+  [75,"ゴローン","ごろーん","graveler","rock","ground"],
+  [76,"ゴローニャ","ごろーにゃ","golem","rock","ground"],
+  [77,"ポニータ","ぽにーた","ponyta","fire",null],
+  [78,"ギャロップ","ぎゃろっぷ","rapidash","fire",null],
+  [79,"ヤドン","やどん","slowpoke","water","psychic"],
+  [80,"ヤドラン","やどらん","slowbro","water","psychic"],
+  [81,"コイル","こいる","magnemite","electric","steel"],
+  [82,"レアコイル","れあこいる","magneton","electric","steel"],
+  [83,"カモネギ","かもねぎ","farfetchd","normal","flying"],
+  [84,"ドードー","どーどー","doduo","normal","flying"],
+  [85,"ドードリオ","どーどりお","dodrio","normal","flying"],
+  [86,"パウワウ","ぱうわう","seel","water",null],
+  [87,"ジュゴン","じゅごん","dewgong","water","ice"],
+  [88,"ベトベター","べとべたー","grimer","poison",null],
+  [89,"ベトベトン","べとべとん","muk","poison",null],
+  [90,"シェルダー","しぇるだー","shellder","water",null],
+  [91,"パルシェン","ぱるしぇん","cloyster","water","ice"],
+  [92,"ゴース","ごーす","gastly","ghost","poison"],
+  [93,"ゴースト","ごーすと","haunter","ghost","poison"],
+  [94,"ゲンガー","げんがー","gengar","ghost","poison"],
+  [95,"イワーク","いわーく","onix","rock","ground"],
+  [96,"スリープ","すりーぷ","drowzee","psychic",null],
+  [97,"スリーパー","すりーぱー","hypno","psychic",null],
+  [98,"クラブ","くらぶ","krabby","water",null],
+  [99,"キングラー","きんぐらー","kingler","water",null],
+  [100,"ビリリダマ","びりりだま","voltorb","electric",null],
+  [101,"マルマイン","まるまいん","electrode","electric",null],
+  [102,"タマタマ","たまたま","exeggcute","grass","psychic"],
+  [103,"ナッシー","なっしー","exeggutor","grass","psychic"],
+  [104,"カラカラ","からから","cubone","ground",null],
+  [105,"ガラガラ","がらがら","marowak","ground",null],
+  [106,"サワムラー","さわむらー","hitmonlee","fighting",null],
+  [107,"エビワラー","えびわらー","hitmonchan","fighting",null],
+  [108,"ベロリンガ","べろりんが","lickitung","normal",null],
+  [109,"ドガース","どがーす","koffing","poison",null],
+  [110,"マタドガス","またどがす","weezing","poison",null],
+  [111,"サイホーン","さいほーん","rhyhorn","ground","rock"],
+  [112,"サイドン","さいどん","rhydon","ground","rock"],
+  [113,"ラッキー","らっきー","chansey","normal",null],
+  [114,"モンジャラ","もんじゃら","tangela","grass",null],
+  [115,"ガルーラ","がるーら","kangaskhan","normal",null],
+  [116,"タッツー","たっつー","horsea","water",null],
+  [117,"シードラ","しーどら","seadra","water",null],
+  [118,"トサキント","とさきんと","goldeen","water",null],
+  [119,"アズマオウ","あずまおう","seaking","water",null],
+  [120,"ヒトデマン","ひとでまん","staryu","water",null],
+  [121,"スターミー","すたーみー","starmie","water","psychic"],
+  [122,"バリヤード","ばりやーど","mr-mime","psychic","fairy"],
+  [123,"ストライク","すとらいく","scyther","bug","flying"],
+  [124,"ルージュラ","るーじゅら","jynx","ice","psychic"],
+  [125,"エレブー","えれぶー","electabuzz","electric",null],
+  [126,"ブーバー","ぶーばー","magmar","fire",null],
+  [127,"カイロス","かいろす","pinsir","bug",null],
+  [128,"ケンタロス","けんたろす","tauros","normal",null],
+  [129,"コイキング","こいきんぐ","magikarp","water",null],
+  [130,"ギャラドス","ぎゃらどす","gyarados","water","flying"],
+  [131,"ラプラス","らぷらす","lapras","water","ice"],
+  [132,"メタモン","めたもん","ditto","normal",null],
+  [133,"イーブイ","いーぶい","eevee","normal",null],
+  [134,"シャワーズ","しゃわーず","vaporeon","water",null],
+  [135,"サンダース","さんだーす","jolteon","electric",null],
+  [136,"ブースター","ぶーすたー","flareon","fire",null],
+  [137,"ポリゴン","ぽりごん","porygon","normal",null],
+  [138,"オムナイト","おむないと","omanyte","rock","water"],
+  [139,"オムスター","おむすたー","omastar","rock","water"],
+  [140,"カブト","かぶと","kabuto","rock","water"],
+  [141,"カブトプス","かぶとぷす","kabutops","rock","water"],
+  [142,"プテラ","ぷてら","aerodactyl","rock","flying"],
+  [143,"カビゴン","かびごん","snorlax","normal",null],
+  [144,"フリーザー","ふりーざー","articuno","ice","flying"],
+  [145,"サンダー","さんだー","zapdos","electric","flying"],
+  [146,"ファイヤー","ふぁいやー","moltres","fire","flying"],
+  [147,"ミニリュウ","みにりゅう","dratini","dragon",null],
+  [148,"ハクリュー","はくりゅー","dragonair","dragon",null],
+  [149,"カイリュー","かいりゅー","dragonite","dragon","flying"],
+  [150,"ミュウツー","みゅうつー","mewtwo","psychic",null],
+  [151,"ミュウ","みゅう","mew","psychic",null],
+  [152,"チコリータ","ちこりーた","chikorita","grass",null],
+  [153,"ベイリーフ","べいりーふ","bayleef","grass",null],
+  [154,"メガニウム","めがにうむ","meganium","grass",null],
+  [155,"ヒノアラシ","ひのあらし","cyndaquil","fire",null],
+  [156,"マグマラシ","まぐまらし","quilava","fire",null],
+  [157,"バクフーン","ばくふーん","typhlosion","fire",null],
+  [158,"ワニノコ","わにのこ","totodile","water",null],
+  [159,"アリゲイツ","ありげいつ","croconaw","water",null],
+  [160,"オーダイル","おーだいる","feraligatr","water",null],
+  [161,"オタチ","おたち","sentret","normal",null],
+  [162,"オオタチ","おおたち","furret","normal",null],
+  [163,"ホーホー","ほーほー","hoothoot","normal","flying"],
+  [164,"ヨルノズク","よるのずく","noctowl","normal","flying"],
+  [165,"レディバ","れでぃば","ledyba","bug","flying"],
+  [166,"レディアン","れでぃあん","ledian","bug","flying"],
+  [167,"イトマル","いとまる","spinarak","bug","poison"],
+  [168,"アリアドス","ありあどす","ariados","bug","poison"],
+  [169,"クロバット","くろばっと","crobat","poison","flying"],
+  [170,"チョンチー","ちょんちー","chinchou","water","electric"],
+  [171,"ランターン","らんたーん","lanturn","water","electric"],
+  [172,"ピチュー","ぴちゅー","pichu","electric",null],
+  [173,"ピィ","ぴぃ","cleffa","fairy",null],
+  [174,"ププリン","ぷぷりん","igglybuff","normal","fairy"],
+  [175,"トゲピー","とげぴー","togepi","fairy",null],
+  [176,"トゲチック","とげちっく","togetic","fairy","flying"],
+  [177,"ネイティ","ねいてぃ","natu","psychic","flying"],
+  [178,"ネイティオ","ねいてぃお","xatu","psychic","flying"],
+  [179,"メリープ","めりーぷ","mareep","electric",null],
+  [180,"モココ","もここ","flaaffy","electric",null],
+  [181,"デンリュウ","でんりゅう","ampharos","electric",null],
+  [182,"キレイハナ","きれいはな","bellossom","grass",null],
+  [183,"マリル","まりる","marill","water","fairy"],
+  [184,"マリルリ","まりるり","azumarill","water","fairy"],
+  [185,"ウソッキー","うそっきー","sudowoodo","rock",null],
+  [186,"ニョロトノ","にょろとの","politoed","water",null],
+  [187,"ハネッコ","はねっこ","hoppip","grass","flying"],
+  [188,"ポポッコ","ぽぽっこ","skiploom","grass","flying"],
+  [189,"ワタッコ","わたっこ","jumpluff","grass","flying"],
+  [190,"エイパム","えいぱむ","aipom","normal",null],
+  [191,"ヒマナッツ","ひまなっつ","sunkern","grass",null],
+  [192,"キマワリ","きまわり","sunflora","grass",null],
+  [193,"ヤンヤンマ","やんやんま","yanma","bug","flying"],
+  [194,"ウパー","うぱー","wooper","water","ground"],
+  [195,"ヌオー","ぬおー","quagsire","water","ground"],
+  [196,"エーフィ","えーふぃ","espeon","psychic",null],
+  [197,"ブラッキー","ぶらっきー","umbreon","dark",null],
+  [198,"ヤミカラス","やみからす","murkrow","dark","flying"],
+  [199,"ヤドキング","やどきんぐ","slowking","water","psychic"],
+  [200,"ムウマ","むうま","misdreavus","ghost",null],
+  [201,"アンノーン","あんのーん","unown","psychic",null],
+  [202,"ソーナンス","そーなんす","wobbuffet","psychic",null],
+  [203,"キリンリキ","きりんりき","girafarig","normal","psychic"],
+  [204,"クヌギダマ","くぬぎだま","pineco","bug",null],
+  [205,"フォレトス","ふぉれとす","forretress","bug","steel"],
+  [206,"ノコッチ","のこっち","dunsparce","normal",null],
+  [207,"グライガー","ぐらいがー","gligar","ground","flying"],
+  [208,"ハガネール","はがねーる","steelix","steel","ground"],
+  [209,"ブルー","ぶるー","snubbull","fairy",null],
+  [210,"グランブル","ぐらんぶる","granbull","fairy",null],
+  [211,"ハリーセン","はりーせん","qwilfish","water","poison"],
+  [212,"ハッサム","はっさむ","scizor","bug","steel"],
+  [213,"ツボツボ","つぼつぼ","shuckle","bug","rock"],
+  [214,"ヘラクロス","へらくろす","heracross","bug","fighting"],
+  [215,"ニューラ","にゅーら","sneasel","dark","ice"],
+  [216,"ヒメグマ","ひめぐま","teddiursa","normal",null],
+  [217,"リングマ","りんぐま","ursaring","normal",null],
+  [218,"マグマッグ","まぐまっぐ","slugma","fire",null],
+  [219,"マグカルゴ","まぐかるご","magcargo","fire","rock"],
+  [220,"ウリムー","うりむー","swinub","ice","ground"],
+  [221,"イノムー","いのむー","piloswine","ice","ground"],
+  [222,"サニーゴ","さにーご","corsola","water","rock"],
+  [223,"テッポウオ","てっぽうお","remoraid","water",null],
+  [224,"オクタン","おくたん","octillery","water",null],
+  [225,"デリバード","でりばーど","delibird","ice","flying"],
+  [226,"マンタイン","まんたいん","mantine","water","flying"],
+  [227,"エアームド","えあーむど","skarmory","steel","flying"],
+  [228,"デルビル","でるびる","houndour","dark","fire"],
+  [229,"ヘルガー","へるがー","houndoom","dark","fire"],
+  [230,"キングドラ","きんぐどら","kingdra","water","dragon"],
+  [231,"ゴマゾウ","ごまぞう","phanpy","ground",null],
+  [232,"ドンファン","どんふぁん","donphan","ground",null],
+  [233,"ポリゴン２","ぽりごん２","porygon2","normal",null],
+  [234,"オドシシ","おどしし","stantler","normal",null],
+  [235,"ドーブル","どーぶる","smeargle","normal",null],
+  [236,"バルキー","ばるきー","tyrogue","fighting",null],
+  [237,"カポエラー","かぽえらー","hitmontop","fighting",null],
+  [238,"ムチュール","むちゅーる","smoochum","ice","psychic"],
+  [239,"エレキッド","えれきっど","elekid","electric",null],
+  [240,"ブビィ","ぶびぃ","magby","fire",null],
+  [241,"ミルタンク","みるたんく","miltank","normal",null],
+  [242,"ハピナス","はぴなす","blissey","normal",null],
+  [243,"ライコウ","らいこう","raikou","electric",null],
+  [244,"エンテイ","えんてい","entei","fire",null],
+  [245,"スイクン","すいくん","suicune","water",null],
+  [246,"ヨーギラス","よーぎらす","larvitar","rock","ground"],
+  [247,"サナギラス","さなぎらす","pupitar","rock","ground"],
+  [248,"バンギラス","ばんぎらす","tyranitar","rock","dark"],
+  [249,"ルギア","るぎあ","lugia","psychic","flying"],
+  [250,"ホウオウ","ほうおう","ho-oh","fire","flying"],
+  [251,"セレビィ","せれびぃ","celebi","psychic","grass"],
+  [252,"キモリ","きもり","treecko","grass",null],
+  [253,"ジュプトル","じゅぷとる","grovyle","grass",null],
+  [254,"ジュカイン","じゅかいん","sceptile","grass",null],
+  [255,"アチャモ","あちゃも","torchic","fire",null],
+  [256,"ワカシャモ","わかしゃも","combusken","fire","fighting"],
+  [257,"バシャーモ","ばしゃーも","blaziken","fire","fighting"],
+  [258,"ミズゴロウ","みずごろう","mudkip","water",null],
+  [259,"ヌマクロー","ぬまくろー","marshtomp","water","ground"],
+  [260,"ラグラージ","らぐらーじ","swampert","water","ground"],
+  [261,"ポチエナ","ぽちえな","poochyena","dark",null],
+  [262,"グラエナ","ぐらえな","mightyena","dark",null],
+  [263,"ジグザグマ","じぐざぐま","zigzagoon","normal",null],
+  [264,"マッスグマ","まっすぐま","linoone","normal",null],
+  [265,"ケムッソ","けむっそ","wurmple","bug",null],
+  [266,"カラサリス","からさりす","silcoon","bug",null],
+  [267,"アゲハント","あげはんと","beautifly","bug","flying"],
+  [268,"マユルド","まゆるど","cascoon","bug",null],
+  [269,"ドクケイル","どくけいる","dustox","bug","poison"],
+  [270,"ハスボー","はすぼー","lotad","water","grass"],
+  [271,"ハスブレロ","はすぶれろ","lombre","water","grass"],
+  [272,"ルンパッパ","るんぱっぱ","ludicolo","water","grass"],
+  [273,"タネボー","たねぼー","seedot","grass",null],
+  [274,"コノハナ","このはな","nuzleaf","grass","dark"],
+  [275,"ダーテング","だーてんぐ","shiftry","grass","dark"],
+  [276,"スバメ","すばめ","taillow","normal","flying"],
+  [277,"オオスバメ","おおすばめ","swellow","normal","flying"],
+  [278,"キャモメ","きゃもめ","wingull","water","flying"],
+  [279,"ペリッパー","ぺりっぱー","pelipper","water","flying"],
+  [280,"ラルトス","らるとす","ralts","psychic","fairy"],
+  [281,"キルリア","きるりあ","kirlia","psychic","fairy"],
+  [282,"サーナイト","さーないと","gardevoir","psychic","fairy"],
+  [283,"アメタマ","あめたま","surskit","bug","water"],
+  [284,"アメモース","あめもーす","masquerain","bug","flying"],
+  [285,"キノココ","きのここ","shroomish","grass",null],
+  [286,"キノガッサ","きのがっさ","breloom","grass","fighting"],
+  [287,"ナマケロ","なまけろ","slakoth","normal",null],
+  [288,"ヤルキモノ","やるきもの","vigoroth","normal",null],
+  [289,"ケッキング","けっきんぐ","slaking","normal",null],
+  [290,"ツチニン","つちにん","nincada","bug","ground"],
+  [291,"テッカニン","てっかにん","ninjask","bug","flying"],
+  [292,"ヌケニン","ぬけにん","shedinja","bug","ghost"],
+  [293,"ゴニョニョ","ごにょにょ","whismur","normal",null],
+  [294,"ドゴーム","どごーむ","loudred","normal",null],
+  [295,"バクオング","ばくおんぐ","exploud","normal",null],
+  [296,"マクノシタ","まくのした","makuhita","fighting",null],
+  [297,"ハリテヤマ","はりてやま","hariyama","fighting",null],
+  [298,"ルリリ","るりり","azurill","normal","fairy"],
+  [299,"ノズパス","のずぱす","nosepass","rock",null],
+  [300,"エネコ","えねこ","skitty","normal",null],
+  [301,"エネコロロ","えねころろ","delcatty","normal",null],
+  [302,"ヤミラミ","やみらみ","sableye","dark","ghost"],
+  [303,"クチート","くちーと","mawile","steel","fairy"],
+  [304,"ココドラ","ここどら","aron","steel","rock"],
+  [305,"コドラ","こどら","lairon","steel","rock"],
+  [306,"ボスゴドラ","ぼすごどら","aggron","steel","rock"],
+  [307,"アサナン","あさなん","meditite","fighting","psychic"],
+  [308,"チャーレム","ちゃーれむ","medicham","fighting","psychic"],
+  [309,"ラクライ","らくらい","electrike","electric",null],
+  [310,"ライボルト","らいぼると","manectric","electric",null],
+  [311,"プラスル","ぷらする","plusle","electric",null],
+  [312,"マイナン","まいなん","minun","electric",null],
+  [313,"バルビート","ばるびーと","volbeat","bug",null],
+  [314,"イルミーゼ","いるみーぜ","illumise","bug",null],
+  [315,"ロゼリア","ろぜりあ","roselia","grass","poison"],
+  [316,"ゴクリン","ごくりん","gulpin","poison",null],
+  [317,"マルノーム","まるのーむ","swalot","poison",null],
+  [318,"キバニア","きばにあ","carvanha","water","dark"],
+  [319,"サメハダー","さめはだー","sharpedo","water","dark"],
+  [320,"ホエルコ","ほえるこ","wailmer","water",null],
+  [321,"ホエルオー","ほえるおー","wailord","water",null],
+  [322,"ドンメル","どんめる","numel","fire","ground"],
+  [323,"バクーダ","ばくーだ","camerupt","fire","ground"],
+  [324,"コータス","こーたす","torkoal","fire",null],
+  [325,"バネブー","ばねぶー","spoink","psychic",null],
+  [326,"ブーピッグ","ぶーぴっぐ","grumpig","psychic",null],
+  [327,"パッチール","ぱっちーる","spinda","normal",null],
+  [328,"ナックラー","なっくらー","trapinch","ground",null],
+  [329,"ビブラーバ","びぶらーば","vibrava","ground","dragon"],
+  [330,"フライゴン","ふらいごん","flygon","ground","dragon"],
+  [331,"サボネア","さぼねあ","cacnea","grass",null],
+  [332,"ノクタス","のくたす","cacturne","grass","dark"],
+  [333,"チルット","ちるっと","swablu","normal","flying"],
+  [334,"チルタリス","ちるたりす","altaria","dragon","flying"],
+  [335,"ザングース","ざんぐーす","zangoose","normal",null],
+  [336,"ハブネーク","はぶねーく","seviper","poison",null],
+  [337,"ルナトーン","るなとーん","lunatone","rock","psychic"],
+  [338,"ソルロック","そるろっく","solrock","rock","psychic"],
+  [339,"ドジョッチ","どじょっち","barboach","water","ground"],
+  [340,"ナマズン","なまずん","whiscash","water","ground"],
+  [341,"ヘイガニ","へいがに","corphish","water",null],
+  [342,"シザリガー","しざりがー","crawdaunt","water","dark"],
+  [343,"ヤジロン","やじろん","baltoy","ground","psychic"],
+  [344,"ネンドール","ねんどーる","claydol","ground","psychic"],
+  [345,"リリーラ","りりーら","lileep","rock","grass"],
+  [346,"ユレイドル","ゆれいどる","cradily","rock","grass"],
+  [347,"アノプス","あのぷす","anorith","rock","bug"],
+  [348,"アーマルド","あーまるど","armaldo","rock","bug"],
+  [349,"ヒンバス","ひんばす","feebas","water",null],
+  [350,"ミロカロス","みろかろす","milotic","water",null],
+  [351,"ポワルン","ぽわるん","castform","normal",null],
+  [352,"カクレオン","かくれおん","kecleon","normal",null],
+  [353,"カゲボウズ","かげぼうず","shuppet","ghost",null],
+  [354,"ジュペッタ","じゅぺった","banette","ghost",null],
+  [355,"ヨマワル","よまわる","duskull","ghost",null],
+  [356,"サマヨール","さまよーる","dusclops","ghost",null],
+  [357,"トロピウス","とろぴうす","tropius","grass","flying"],
+  [358,"チリーン","ちりーん","chimecho","psychic",null],
+  [359,"アブソル","あぶそる","absol","dark",null],
+  [360,"ソーナノ","そーなの","wynaut","psychic",null],
+  [361,"ユキワラシ","ゆきわらし","snorunt","ice",null],
+  [362,"オニゴーリ","おにごーり","glalie","ice",null],
+  [363,"タマザラシ","たまざらし","spheal","ice","water"],
+  [364,"トドグラー","とどぐらー","sealeo","ice","water"],
+  [365,"トドゼルガ","とどぜるが","walrein","ice","water"],
+  [366,"パールル","ぱーるる","clamperl","water",null],
+  [367,"ハンテール","はんてーる","huntail","water",null],
+  [368,"サクラビス","さくらびす","gorebyss","water",null],
+  [369,"ジーランス","じーらんす","relicanth","water","rock"],
+  [370,"ラブカス","らぶかす","luvdisc","water",null],
+  [371,"タツベイ","たつべい","bagon","dragon",null],
+  [372,"コモルー","こもるー","shelgon","dragon",null],
+  [373,"ボーマンダ","ぼーまんだ","salamence","dragon","flying"],
+  [374,"ダンバル","だんばる","beldum","steel","psychic"],
+  [375,"メタング","めたんぐ","metang","steel","psychic"],
+  [376,"メタグロス","めたぐろす","metagross","steel","psychic"],
+  [377,"レジロック","れじろっく","regirock","rock",null],
+  [378,"レジアイス","れじあいす","regice","ice",null],
+  [379,"レジスチル","れじすちる","registeel","steel",null],
+  [380,"ラティアス","らてぃあす","latias","dragon","psychic"],
+  [381,"ラティオス","らてぃおす","latios","dragon","psychic"],
+  [382,"カイオーガ","かいおーが","kyogre","water",null],
+  [383,"グラードン","ぐらーどん","groudon","ground",null],
+  [384,"レックウザ","れっくうざ","rayquaza","dragon","flying"],
+  [385,"ジラーチ","じらーち","jirachi","steel","psychic"],
+  [386,"デオキシス","でおきしす","deoxys-normal","psychic",null],
+  [387,"ナエトル","なえとる","turtwig","grass",null],
+  [388,"ハヤシガメ","はやしがめ","grotle","grass",null],
+  [389,"ドダイトス","どだいとす","torterra","grass","ground"],
+  [390,"ヒコザル","ひこざる","chimchar","fire",null],
+  [391,"モウカザル","もうかざる","monferno","fire","fighting"],
+  [392,"ゴウカザル","ごうかざる","infernape","fire","fighting"],
+  [393,"ポッチャマ","ぽっちゃま","piplup","water",null],
+  [394,"ポッタイシ","ぽったいし","prinplup","water",null],
+  [395,"エンペルト","えんぺると","empoleon","water","steel"],
+  [396,"ムックル","むっくる","starly","normal","flying"],
+  [397,"ムクバード","むくばーど","staravia","normal","flying"],
+  [398,"ムクホーク","むくほーく","staraptor","normal","flying"],
+  [399,"ビッパ","びっぱ","bidoof","normal",null],
+  [400,"ビーダル","びーだる","bibarel","normal","water"],
+  [401,"コロボーシ","ころぼーし","kricketot","bug",null],
+  [402,"コロトック","ころとっく","kricketune","bug",null],
+  [403,"コリンク","こりんく","shinx","electric",null],
+  [404,"ルクシオ","るくしお","luxio","electric",null],
+  [405,"レントラー","れんとらー","luxray","electric",null],
+  [406,"スボミー","すぼみー","budew","grass","poison"],
+  [407,"ロズレイド","ろずれいど","roserade","grass","poison"],
+  [408,"ズガイドス","ずがいどす","cranidos","rock",null],
+  [409,"ラムパルド","らむぱるど","rampardos","rock",null],
+  [410,"タテトプス","たてとぷす","shieldon","rock","steel"],
+  [411,"トリデプス","とりでぷす","bastiodon","rock","steel"],
+  [412,"ミノムッチ","みのむっち","burmy","bug",null],
+  [413,"ミノマダム","みのまだむ","wormadam-plant","bug","grass"],
+  [414,"ガーメイル","がーめいる","mothim","bug","flying"],
+  [415,"ミツハニー","みつはにー","combee","bug","flying"],
+  [416,"ビークイン","びーくいん","vespiquen","bug","flying"],
+  [417,"パチリス","ぱちりす","pachirisu","electric",null],
+  [418,"ブイゼル","ぶいぜる","buizel","water",null],
+  [419,"フローゼル","ふろーぜる","floatzel","water",null],
+  [420,"チェリンボ","ちぇりんぼ","cherubi","grass",null],
+  [421,"チェリム","ちぇりむ","cherrim","grass",null],
+  [422,"カラナクシ","からなくし","shellos","water",null],
+  [423,"トリトドン","とりとどん","gastrodon","water","ground"],
+  [424,"エテボース","えてぼーす","ambipom","normal",null],
+  [425,"フワンテ","ふわんて","drifloon","ghost","flying"],
+  [426,"フワライド","ふわらいど","drifblim","ghost","flying"],
+  [427,"ミミロル","みみろる","buneary","normal",null],
+  [428,"ミミロップ","みみろっぷ","lopunny","normal",null],
+  [429,"ムウマージ","むうまーじ","mismagius","ghost",null],
+  [430,"ドンカラス","どんからす","honchkrow","dark","flying"],
+  [431,"ニャルマー","にゃるまー","glameow","normal",null],
+  [432,"ブニャット","ぶにゃっと","purugly","normal",null],
+  [433,"リーシャン","りーしゃん","chingling","psychic",null],
+  [434,"スカンプー","すかんぷー","stunky","poison","dark"],
+  [435,"スカタンク","すかたんく","skuntank","poison","dark"],
+  [436,"ドーミラー","どーみらー","bronzor","steel","psychic"],
+  [437,"ドータクン","どーたくん","bronzong","steel","psychic"],
+  [438,"ウソハチ","うそはち","bonsly","rock",null],
+  [439,"マネネ","まねね","mime-jr","psychic","fairy"],
+  [440,"ピンプク","ぴんぷく","happiny","normal",null],
+  [441,"ペラップ","ぺらっぷ","chatot","normal","flying"],
+  [442,"ミカルゲ","みかるげ","spiritomb","ghost","dark"],
+  [443,"フカマル","ふかまる","gible","dragon","ground"],
+  [444,"ガバイト","がばいと","gabite","dragon","ground"],
+  [445,"ガブリアス","がぶりあす","garchomp","dragon","ground"],
+  [446,"ゴンベ","ごんべ","munchlax","normal",null],
+  [447,"リオル","りおる","riolu","fighting",null],
+  [448,"ルカリオ","るかりお","lucario","fighting","steel"],
+  [449,"ヒポポタス","ひぽぽたす","hippopotas","ground",null],
+  [450,"カバルドン","かばるどん","hippowdon","ground",null],
+  [451,"スコルピ","すこるぴ","skorupi","poison","bug"],
+  [452,"ドラピオン","どらぴおん","drapion","poison","dark"],
+  [453,"グレッグル","ぐれっぐる","croagunk","poison","fighting"],
+  [454,"ドクロッグ","どくろっぐ","toxicroak","poison","fighting"],
+  [455,"マスキッパ","ますきっぱ","carnivine","grass",null],
+  [456,"ケイコウオ","けいこうお","finneon","water",null],
+  [457,"ネオラント","ねおらんと","lumineon","water",null],
+  [458,"タマンタ","たまんた","mantyke","water","flying"],
+  [459,"ユキカブリ","ゆきかぶり","snover","grass","ice"],
+  [460,"ユキノオー","ゆきのおー","abomasnow","grass","ice"],
+  [461,"マニューラ","まにゅーら","weavile","dark","ice"],
+  [462,"ジバコイル","じばこいる","magnezone","electric","steel"],
+  [463,"ベロベルト","べろべると","lickilicky","normal",null],
+  [464,"ドサイドン","どさいどん","rhyperior","ground","rock"],
+  [465,"モジャンボ","もじゃんぼ","tangrowth","grass",null],
+  [466,"エレキブル","えれきぶる","electivire","electric",null],
+  [467,"ブーバーン","ぶーばーん","magmortar","fire",null],
+  [468,"トゲキッス","とげきっす","togekiss","fairy","flying"],
+  [469,"メガヤンマ","めがやんま","yanmega","bug","flying"],
+  [470,"リーフィア","りーふぃあ","leafeon","grass",null],
+  [471,"グレイシア","ぐれいしあ","glaceon","ice",null],
+  [472,"グライオン","ぐらいおん","gliscor","ground","flying"],
+  [473,"マンムー","まんむー","mamoswine","ice","ground"],
+  [474,"ポリゴンＺ","ぽりごんＺ","porygon-z","normal",null],
+  [475,"エルレイド","えるれいど","gallade","psychic","fighting"],
+  [476,"ダイノーズ","だいのーず","probopass","rock","steel"],
+  [477,"ヨノワール","よのわーる","dusknoir","ghost",null],
+  [478,"ユキメノコ","ゆきめのこ","froslass","ice","ghost"],
+  [479,"ロトム","ろとむ","rotom","electric","ghost"],
+  [480,"ユクシー","ゆくしー","uxie","psychic",null],
+  [481,"エムリット","えむりっと","mesprit","psychic",null],
+  [482,"アグノム","あぐのむ","azelf","psychic",null],
+  [483,"ディアルガ","でぃあるが","dialga","steel","dragon"],
+  [484,"パルキア","ぱるきあ","palkia","water","dragon"],
+  [485,"ヒードラン","ひーどらん","heatran","fire","steel"],
+  [486,"レジギガス","れじぎがす","regigigas","normal",null],
+  [487,"ギラティナ","ぎらてぃな","giratina-altered","ghost","dragon"],
+  [488,"クレセリア","くれせりあ","cresselia","psychic",null],
+  [489,"フィオネ","ふぃおね","phione","water",null],
+  [490,"マナフィ","まなふぃ","manaphy","water",null],
+  [491,"ダークライ","だーくらい","darkrai","dark",null],
+  [492,"シェイミ","しぇいみ","shaymin-land","grass",null],
+  [493,"アルセウス","あるせうす","arceus","normal",null],
+  [494,"ビクティニ","びくてぃに","victini","psychic","fire"],
+  [495,"ツタージャ","つたーじゃ","snivy","grass",null],
+  [496,"ジャノビー","じゃのびー","servine","grass",null],
+  [497,"ジャローダ","じゃろーだ","serperior","grass",null],
+  [498,"ポカブ","ぽかぶ","tepig","fire",null],
+  [499,"チャオブー","ちゃおぶー","pignite","fire","fighting"],
+  [500,"エンブオー","えんぶおー","emboar","fire","fighting"],
+  [501,"ミジュマル","みじゅまる","oshawott","water",null],
+  [502,"フタチマル","ふたちまる","dewott","water",null],
+  [503,"ダイケンキ","だいけんき","samurott","water",null],
+  [504,"ミネズミ","みねずみ","patrat","normal",null],
+  [505,"ミルホッグ","みるほっぐ","watchog","normal",null],
+  [506,"ヨーテリー","よーてりー","lillipup","normal",null],
+  [507,"ハーデリア","はーでりあ","herdier","normal",null],
+  [508,"ムーランド","むーらんど","stoutland","normal",null],
+  [509,"チョロネコ","ちょろねこ","purrloin","dark",null],
+  [510,"レパルダス","れぱるだす","liepard","dark",null],
+  [511,"ヤナップ","やなっぷ","pansage","grass",null],
+  [512,"ヤナッキー","やなっきー","simisage","grass",null],
+  [513,"バオップ","ばおっぷ","pansear","fire",null],
+  [514,"バオッキー","ばおっきー","simisear","fire",null],
+  [515,"ヒヤップ","ひやっぷ","panpour","water",null],
+  [516,"ヒヤッキー","ひやっきー","simipour","water",null],
+  [517,"ムンナ","むんな","munna","psychic",null],
+  [518,"ムシャーナ","むしゃーな","musharna","psychic",null],
+  [519,"マメパト","まめぱと","pidove","normal","flying"],
+  [520,"ハトーボー","はとーぼー","tranquill","normal","flying"],
+  [521,"ケンホロウ","けんほろう","unfezant","normal","flying"],
+  [522,"シママ","しまま","blitzle","electric",null],
+  [523,"ゼブライカ","ぜぶらいか","zebstrika","electric",null],
+  [524,"ダンゴロ","だんごろ","roggenrola","rock",null],
+  [525,"ガントル","がんとる","boldore","rock",null],
+  [526,"ギガイアス","ぎがいあす","gigalith","rock",null],
+  [527,"コロモリ","ころもり","woobat","psychic","flying"],
+  [528,"ココロモリ","こころもり","swoobat","psychic","flying"],
+  [529,"モグリュー","もぐりゅー","drilbur","ground",null],
+  [530,"ドリュウズ","どりゅうず","excadrill","ground","steel"],
+  [531,"タブンネ","たぶんね","audino","normal",null],
+  [532,"ドッコラー","どっこらー","timburr","fighting",null],
+  [533,"ドテッコツ","どてっこつ","gurdurr","fighting",null],
+  [534,"ローブシン","ろーぶしん","conkeldurr","fighting",null],
+  [535,"オタマロ","おたまろ","tympole","water",null],
+  [536,"ガマガル","がまがる","palpitoad","water","ground"],
+  [537,"ガマゲロゲ","がまげろげ","seismitoad","water","ground"],
+  [538,"ナゲキ","なげき","throh","fighting",null],
+  [539,"ダゲキ","だげき","sawk","fighting",null],
+  [540,"クルミル","くるみる","sewaddle","bug","grass"],
+  [541,"クルマユ","くるまゆ","swadloon","bug","grass"],
+  [542,"ハハコモリ","ははこもり","leavanny","bug","grass"],
+  [543,"フシデ","ふしで","venipede","bug","poison"],
+  [544,"ホイーガ","ほいーが","whirlipede","bug","poison"],
+  [545,"ペンドラー","ぺんどらー","scolipede","bug","poison"],
+  [546,"モンメン","もんめん","cottonee","grass","fairy"],
+  [547,"エルフーン","えるふーん","whimsicott","grass","fairy"],
+  [548,"チュリネ","ちゅりね","petilil","grass",null],
+  [549,"ドレディア","どれでぃあ","lilligant","grass",null],
+  [550,"バスラオ","ばすらお","basculin-red-striped","water",null],
+  [551,"メグロコ","めぐろこ","sandile","ground","dark"],
+  [552,"ワルビル","わるびる","krokorok","ground","dark"],
+  [553,"ワルビアル","わるびある","krookodile","ground","dark"],
+  [554,"ダルマッカ","だるまっか","darumaka","fire",null],
+  [555,"ヒヒダルマ","ひひだるま","darmanitan-standard","fire",null],
+  [556,"マラカッチ","まらかっち","maractus","grass",null],
+  [557,"イシズマイ","いしずまい","dwebble","bug","rock"],
+  [558,"イワパレス","いわぱれす","crustle","bug","rock"],
+  [559,"ズルッグ","ずるっぐ","scraggy","dark","fighting"],
+  [560,"ズルズキン","ずるずきん","scrafty","dark","fighting"],
+  [561,"シンボラー","しんぼらー","sigilyph","psychic","flying"],
+  [562,"デスマス","ですます","yamask","ghost",null],
+  [563,"デスカーン","ですかーん","cofagrigus","ghost",null],
+  [564,"プロトーガ","ぷろとーが","tirtouga","water","rock"],
+  [565,"アバゴーラ","あばごーら","carracosta","water","rock"],
+  [566,"アーケン","あーけん","archen","rock","flying"],
+  [567,"アーケオス","あーけおす","archeops","rock","flying"],
+  [568,"ヤブクロン","やぶくろん","trubbish","poison",null],
+  [569,"ダストダス","だすとだす","garbodor","poison",null],
+  [570,"ゾロア","ぞろあ","zorua","dark",null],
+  [571,"ゾロアーク","ぞろあーく","zoroark","dark",null],
+  [572,"チラーミィ","ちらーみぃ","minccino","normal",null],
+  [573,"チラチーノ","ちらちーの","cinccino","normal",null],
+  [574,"ゴチム","ごちむ","gothita","psychic",null],
+  [575,"ゴチミル","ごちみる","gothorita","psychic",null],
+  [576,"ゴチルゼル","ごちるぜる","gothitelle","psychic",null],
+  [577,"ユニラン","ゆにらん","solosis","psychic",null],
+  [578,"ダブラン","だぶらん","duosion","psychic",null],
+  [579,"ランクルス","らんくるす","reuniclus","psychic",null],
+  [580,"コアルヒー","こあるひー","ducklett","water","flying"],
+  [581,"スワンナ","すわんな","swanna","water","flying"],
+  [582,"バニプッチ","ばにぷっち","vanillite","ice",null],
+  [583,"バニリッチ","ばにりっち","vanillish","ice",null],
+  [584,"バイバニラ","ばいばにら","vanilluxe","ice",null],
+  [585,"シキジカ","しきじか","deerling","normal","grass"],
+  [586,"メブキジカ","めぶきじか","sawsbuck","normal","grass"],
+  [587,"エモンガ","えもんが","emolga","electric","flying"],
+  [588,"カブルモ","かぶるも","karrablast","bug",null],
+  [589,"シュバルゴ","しゅばるご","escavalier","bug","steel"],
+  [590,"タマゲタケ","たまげたけ","foongus","grass","poison"],
+  [591,"モロバレル","もろばれる","amoonguss","grass","poison"],
+  [592,"プルリル","ぷるりる","frillish-male","water","ghost"],
+  [593,"ブルンゲル","ぶるんげる","jellicent-male","water","ghost"],
+  [594,"ママンボウ","ままんぼう","alomomola","water",null],
+  [595,"バチュル","ばちゅる","joltik","bug","electric"],
+  [596,"デンチュラ","でんちゅら","galvantula","bug","electric"],
+  [597,"テッシード","てっしーど","ferroseed","grass","steel"],
+  [598,"ナットレイ","なっとれい","ferrothorn","grass","steel"],
+  [599,"ギアル","ぎある","klink","steel",null],
+  [600,"ギギアル","ぎぎある","klang","steel",null],
+  [601,"ギギギアル","ぎぎぎある","klinklang","steel",null],
+  [602,"シビシラス","しびしらす","tynamo","electric",null],
+  [603,"シビビール","しびびーる","eelektrik","electric",null],
+  [604,"シビルドン","しびるどん","eelektross","electric",null],
+  [605,"リグレー","りぐれー","elgyem","psychic",null],
+  [606,"オーベム","おーべむ","beheeyem","psychic",null],
+  [607,"ヒトモシ","ひともし","litwick","ghost","fire"],
+  [608,"ランプラー","らんぷらー","lampent","ghost","fire"],
+  [609,"シャンデラ","しゃんでら","chandelure","ghost","fire"],
+  [610,"キバゴ","きばご","axew","dragon",null],
+  [611,"オノンド","おのんど","fraxure","dragon",null],
+  [612,"オノノクス","おののくす","haxorus","dragon",null],
+  [613,"クマシュン","くましゅん","cubchoo","ice",null],
+  [614,"ツンベアー","つんべあー","beartic","ice",null],
+  [615,"フリージオ","ふりーじお","cryogonal","ice",null],
+  [616,"チョボマキ","ちょぼまき","shelmet","bug",null],
+  [617,"アギルダー","あぎるだー","accelgor","bug",null],
+  [618,"マッギョ","まっぎょ","stunfisk","ground","electric"],
+  [619,"コジョフー","こじょふー","mienfoo","fighting",null],
+  [620,"コジョンド","こじょんど","mienshao","fighting",null],
+  [621,"クリムガン","くりむがん","druddigon","dragon",null],
+  [622,"ゴビット","ごびっと","golett","ground","ghost"],
+  [623,"ゴルーグ","ごるーぐ","golurk","ground","ghost"],
+  [624,"コマタナ","こまたな","pawniard","dark","steel"],
+  [625,"キリキザン","きりきざん","bisharp","dark","steel"],
+  [626,"バッフロン","ばっふろん","bouffalant","normal",null],
+  [627,"ワシボン","わしぼん","rufflet","normal","flying"],
+  [628,"ウォーグル","うぉーぐる","braviary","normal","flying"],
+  [629,"バルチャイ","ばるちゃい","vullaby","dark","flying"],
+  [630,"バルジーナ","ばるじーな","mandibuzz","dark","flying"],
+  [631,"クイタラン","くいたらん","heatmor","fire",null],
+  [632,"アイアント","あいあんと","durant","bug","steel"],
+  [633,"モノズ","ものず","deino","dark","dragon"],
+  [634,"ジヘッド","じへっど","zweilous","dark","dragon"],
+  [635,"サザンドラ","さざんどら","hydreigon","dark","dragon"],
+  [636,"メラルバ","めらるば","larvesta","bug","fire"],
+  [637,"ウルガモス","うるがもす","volcarona","bug","fire"],
+  [638,"コバルオン","こばるおん","cobalion","steel","fighting"],
+  [639,"テラキオン","てらきおん","terrakion","rock","fighting"],
+  [640,"ビリジオン","びりじおん","virizion","grass","fighting"],
+  [641,"トルネロス","とるねろす","tornadus-incarnate","flying",null],
+  [642,"ボルトロス","ぼるとろす","thundurus-incarnate","electric","flying"],
+  [643,"レシラム","れしらむ","reshiram","dragon","fire"],
+  [644,"ゼクロム","ぜくろむ","zekrom","dragon","electric"],
+  [645,"ランドロス","らんどろす","landorus-incarnate","ground","flying"],
+  [646,"キュレム","きゅれむ","kyurem","dragon","ice"],
+  [647,"ケルディオ","けるでぃお","keldeo-ordinary","water","fighting"],
+  [648,"メロエッタ","めろえった","meloetta-aria","normal","psychic"],
+  [649,"ゲノセクト","げのせくと","genesect","bug","steel"],
+  [650,"ハリマロン","はりまろん","chespin","grass",null],
+  [651,"ハリボーグ","はりぼーぐ","quilladin","grass",null],
+  [652,"ブリガロン","ぶりがろん","chesnaught","grass","fighting"],
+  [653,"フォッコ","ふぉっこ","fennekin","fire",null],
+  [654,"テールナー","てーるなー","braixen","fire",null],
+  [655,"マフォクシー","まふぉくしー","delphox","fire","psychic"],
+  [656,"ケロマツ","けろまつ","froakie","water",null],
+  [657,"ゲコガシラ","げこがしら","frogadier","water",null],
+  [658,"ゲッコウガ","げっこうが","greninja","water","dark"],
+  [659,"ホルビー","ほるびー","bunnelby","normal",null],
+  [660,"ホルード","ほるーど","diggersby","normal","ground"],
+  [661,"ヤヤコマ","ややこま","fletchling","normal","flying"],
+  [662,"ヒノヤコマ","ひのやこま","fletchinder","fire","flying"],
+  [663,"ファイアロー","ふぁいあろー","talonflame","fire","flying"],
+  [664,"コフキムシ","こふきむし","scatterbug","bug",null],
+  [665,"コフーライ","こふーらい","spewpa","bug",null],
+  [666,"ビビヨン","びびよん","vivillon","bug","flying"],
+  [667,"シシコ","ししこ","litleo","fire","normal"],
+  [668,"カエンジシ","かえんじし","pyroar-male","fire","normal"],
+  [669,"フラベベ","ふらべべ","flabebe","fairy",null],
+  [670,"フラエッテ","ふらえって","floette","fairy",null],
+  [671,"フラージェス","ふらーじぇす","florges","fairy",null],
+  [672,"メェークル","めぇーくる","skiddo","grass",null],
+  [673,"ゴーゴート","ごーごーと","gogoat","grass",null],
+  [674,"ヤンチャム","やんちゃむ","pancham","fighting",null],
+  [675,"ゴロンダ","ごろんだ","pangoro","fighting","dark"],
+  [676,"トリミアン","とりみあん","furfrou","normal",null],
+  [677,"ニャスパー","にゃすぱー","espurr","psychic",null],
+  [678,"ニャオニクス","にゃおにくす","meowstic-male","psychic",null],
+  [679,"ヒトツキ","ひとつき","honedge","steel","ghost"],
+  [680,"ニダンギル","にだんぎる","doublade","steel","ghost"],
+  [681,"ギルガルド","ぎるがるど","aegislash-shield","steel","ghost"],
+  [682,"シュシュプ","しゅしゅぷ","spritzee","fairy",null],
+  [683,"フレフワン","ふれふわん","aromatisse","fairy",null],
+  [684,"ペロッパフ","ぺろっぱふ","swirlix","fairy",null],
+  [685,"ペロリーム","ぺろりーむ","slurpuff","fairy",null],
+  [686,"マーイーカ","まーいーか","inkay","dark","psychic"],
+  [687,"カラマネロ","からまねろ","malamar","dark","psychic"],
+  [688,"カメテテ","かめてて","binacle","rock","water"],
+  [689,"ガメノデス","がめのです","barbaracle","rock","water"],
+  [690,"クズモー","くずもー","skrelp","poison","water"],
+  [691,"ドラミドロ","どらみどろ","dragalge","poison","dragon"],
+  [692,"ウデッポウ","うでっぽう","clauncher","water",null],
+  [693,"ブロスター","ぶろすたー","clawitzer","water",null],
+  [694,"エリキテル","えりきてる","helioptile","electric","normal"],
+  [695,"エレザード","えれざーど","heliolisk","electric","normal"],
+  [696,"チゴラス","ちごらす","tyrunt","rock","dragon"],
+  [697,"ガチゴラス","がちごらす","tyrantrum","rock","dragon"],
+  [698,"アマルス","あまるす","amaura","rock","ice"],
+  [699,"アマルルガ","あまるるが","aurorus","rock","ice"],
+  [700,"ニンフィア","にんふぃあ","sylveon","fairy",null],
+  [701,"ルチャブル","るちゃぶる","hawlucha","fighting","flying"],
+  [702,"デデンネ","ででんね","dedenne","electric","fairy"],
+  [703,"メレシー","めれしー","carbink","rock","fairy"],
+  [704,"ヌメラ","ぬめら","goomy","dragon",null],
+  [705,"ヌメイル","ぬめいる","sliggoo","dragon",null],
+  [706,"ヌメルゴン","ぬめるごん","goodra","dragon",null],
+  [707,"クレッフィ","くれっふぃ","klefki","steel","fairy"],
+  [708,"ボクレー","ぼくれー","phantump","ghost","grass"],
+  [709,"オーロット","おーろっと","trevenant","ghost","grass"],
+  [710,"バケッチャ","ばけっちゃ","pumpkaboo-average","ghost","grass"],
+  [711,"パンプジン","ぱんぷじん","gourgeist-average","ghost","grass"],
+  [712,"カチコール","かちこーる","bergmite","ice",null],
+  [713,"クレベース","くれべーす","avalugg","ice",null],
+  [714,"オンバット","おんばっと","noibat","flying","dragon"],
+  [715,"オンバーン","おんばーん","noivern","flying","dragon"],
+  [716,"ゼルネアス","ぜるねあす","xerneas","fairy",null],
+  [717,"イベルタル","いべるたる","yveltal","dark","flying"],
+  [718,"ジガルデ","じがるで","zygarde-50","dragon","ground"],
+  [719,"ディアンシー","でぃあんしー","diancie","rock","fairy"],
+  [720,"フーパ","ふーぱ","hoopa","psychic","ghost"],
+  [721,"ボルケニオン","ぼるけにおん","volcanion","fire","water"],
+  [722,"モクロー","もくろー","rowlet","grass","flying"],
+  [723,"フクスロー","ふくすろー","dartrix","grass","flying"],
+  [724,"ジュナイパー","じゅないぱー","decidueye","grass","ghost"],
+  [725,"ニャビー","にゃびー","litten","fire",null],
+  [726,"ニャヒート","にゃひーと","torracat","fire",null],
+  [727,"ガオガエン","がおがえん","incineroar","fire","dark"],
+  [728,"アシマリ","あしまり","popplio","water",null],
+  [729,"オシャマリ","おしゃまり","brionne","water",null],
+  [730,"アシレーヌ","あしれーぬ","primarina","water","fairy"],
+  [731,"ツツケラ","つつけら","pikipek","normal","flying"],
+  [732,"ケララッパ","けららっぱ","trumbeak","normal","flying"],
+  [733,"ドデカバシ","どでかばし","toucannon","normal","flying"],
+  [734,"ヤングース","やんぐーす","yungoos","normal",null],
+  [735,"デカグース","でかぐーす","gumshoos","normal",null],
+  [736,"アゴジムシ","あごじむし","grubbin","bug",null],
+  [737,"デンヂムシ","でんぢむし","charjabug","bug","electric"],
+  [738,"クワガノン","くわがのん","vikavolt","bug","electric"],
+  [739,"マケンカニ","まけんかに","crabrawler","fighting",null],
+  [740,"ケケンカニ","けけんかに","crabominable","fighting","ice"],
+  [741,"オドリドリ","おどりどり","oricorio-baile","fire","flying"],
+  [742,"アブリー","あぶりー","cutiefly","bug","fairy"],
+  [743,"アブリボン","あぶりぼん","ribombee","bug","fairy"],
+  [744,"イワンコ","いわんこ","rockruff","rock",null],
+  [745,"ルガルガン","るがるがん","lycanroc-midday","rock",null],
+  [746,"ヨワシ","よわし","wishiwashi-solo","water",null],
+  [747,"ヒドイデ","ひどいで","mareanie","poison","water"],
+  [748,"ドヒドイデ","どひどいで","toxapex","poison","water"],
+  [749,"ドロバンコ","どろばんこ","mudbray","ground",null],
+  [750,"バンバドロ","ばんばどろ","mudsdale","ground",null],
+  [751,"シズクモ","しずくも","dewpider","water","bug"],
+  [752,"オニシズクモ","おにしずくも","araquanid","water","bug"],
+  [753,"カリキリ","かりきり","fomantis","grass",null],
+  [754,"ラランテス","ららんてす","lurantis","grass",null],
+  [755,"ネマシュ","ねましゅ","morelull","grass","fairy"],
+  [756,"マシェード","ましぇーど","shiinotic","grass","fairy"],
+  [757,"ヤトウモリ","やとうもり","salandit","poison","fire"],
+  [758,"エンニュート","えんにゅーと","salazzle","poison","fire"],
+  [759,"ヌイコグマ","ぬいこぐま","stufful","normal","fighting"],
+  [760,"キテルグマ","きてるぐま","bewear","normal","fighting"],
+  [761,"アマカジ","あまかじ","bounsweet","grass",null],
+  [762,"アママイコ","あままいこ","steenee","grass",null],
+  [763,"アマージョ","あまーじょ","tsareena","grass",null],
+  [764,"キュワワー","きゅわわー","comfey","fairy",null],
+  [765,"ヤレユータン","やれゆーたん","oranguru","normal","psychic"],
+  [766,"ナゲツケサル","なげつけさる","passimian","fighting",null],
+  [767,"コソクムシ","こそくむし","wimpod","bug","water"],
+  [768,"グソクムシャ","ぐそくむしゃ","golisopod","bug","water"],
+  [769,"スナバァ","すなばぁ","sandygast","ghost","ground"],
+  [770,"シロデスナ","しろですな","palossand","ghost","ground"],
+  [771,"ナマコブシ","なまこぶし","pyukumuku","water",null],
+  [772,"タイプ：ヌル","たいぷ：ぬる","type-null","normal",null],
+  [773,"シルヴァディ","しるゔぁでぃ","silvally","normal",null],
+  [774,"メテノ","めての","minior-red-meteor","rock","flying"],
+  [775,"ネッコアラ","ねっこあら","komala","normal",null],
+  [776,"バクガメス","ばくがめす","turtonator","fire","dragon"],
+  [777,"トゲデマル","とげでまる","togedemaru","electric","steel"],
+  [778,"ミミッキュ","みみっきゅ","mimikyu-disguised","ghost","fairy"],
+  [779,"ハギギシリ","はぎぎしり","bruxish","water","psychic"],
+  [780,"ジジーロン","じじーろん","drampa","normal","dragon"],
+  [781,"ダダリン","だだりん","dhelmise","ghost","grass"],
+  [782,"ジャラコ","じゃらこ","jangmo-o","dragon",null],
+  [783,"ジャランゴ","じゃらんご","hakamo-o","dragon","fighting"],
+  [784,"ジャラランガ","じゃららんが","kommo-o","dragon","fighting"],
+  [785,"カプ・コケコ","かぷ・こけこ","tapu-koko","electric","fairy"],
+  [786,"カプ・テテフ","かぷ・ててふ","tapu-lele","psychic","fairy"],
+  [787,"カプ・ブルル","かぷ・ぶるる","tapu-bulu","grass","fairy"],
+  [788,"カプ・レヒレ","かぷ・れひれ","tapu-fini","water","fairy"],
+  [789,"コスモッグ","こすもっぐ","cosmog","psychic",null],
+  [790,"コスモウム","こすもうむ","cosmoem","psychic",null],
+  [791,"ソルガレオ","そるがれお","solgaleo","psychic","steel"],
+  [792,"ルナアーラ","るなあーら","lunala","psychic","ghost"],
+  [793,"ウツロイド","うつろいど","nihilego","rock","poison"],
+  [794,"マッシブーン","まっしぶーん","buzzwole","bug","fighting"],
+  [795,"フェローチェ","ふぇろーちぇ","pheromosa","bug","fighting"],
+  [796,"デンジュモク","でんじゅもく","xurkitree","electric",null],
+  [797,"テッカグヤ","てっかぐや","celesteela","steel","flying"],
+  [798,"カミツルギ","かみつるぎ","kartana","grass","steel"],
+  [799,"アクジキング","あくじきんぐ","guzzlord","dark","dragon"],
+  [800,"ネクロズマ","ねくろずま","necrozma","psychic",null],
+  [801,"マギアナ","まぎあな","magearna","steel","fairy"],
+  [802,"マーシャドー","まーしゃどー","marshadow","fighting","ghost"],
+  [803,"ベベノム","べべのむ","poipole","poison",null],
+  [804,"アーゴヨン","あーごよん","naganadel","poison","dragon"],
+  [805,"ツンデツンデ","つんでつんで","stakataka","rock","steel"],
+  [806,"ズガドーン","ずがどーん","blacephalon","fire","ghost"],
+  [807,"ゼラオラ","ぜらおら","zeraora","electric",null],
+  [808,"メルタン","めるたん","meltan","steel",null],
+  [809,"メルメタル","めるめたる","melmetal","steel",null],
+  [810,"サルノリ","さるのり","grookey","grass",null],
+  [811,"バチンキー","ばちんきー","thwackey","grass",null],
+  [812,"ゴリランダー","ごりらんだー","rillaboom","grass",null],
+  [813,"ヒバニー","ひばにー","scorbunny","fire",null],
+  [814,"ラビフット","らびふっと","raboot","fire",null],
+  [815,"エースバーン","えーすばーん","cinderace","fire",null],
+  [816,"メッソン","めっそん","sobble","water",null],
+  [817,"ジメレオン","じめれおん","drizzile","water",null],
+  [818,"インテレオン","いんてれおん","inteleon","water",null],
+  [819,"ホシガリス","ほしがりす","skwovet","normal",null],
+  [820,"ヨクバリス","よくばりす","greedent","normal",null],
+  [821,"ココガラ","ここがら","rookidee","flying",null],
+  [822,"アオガラス","あおがらす","corvisquire","flying",null],
+  [823,"アーマーガア","あーまーがあ","corviknight","flying","steel"],
+  [824,"サッチムシ","さっちむし","blipbug","bug",null],
+  [825,"レドームシ","れどーむし","dottler","bug","psychic"],
+  [826,"イオルブ","いおるぶ","orbeetle","bug","psychic"],
+  [827,"クスネ","くすね","nickit","dark",null],
+  [828,"フォクスライ","ふぉくすらい","thievul","dark",null],
+  [829,"ヒメンカ","ひめんか","gossifleur","grass",null],
+  [830,"ワタシラガ","わたしらが","eldegoss","grass",null],
+  [831,"ウールー","うーるー","wooloo","normal",null],
+  [832,"バイウールー","ばいうーるー","dubwool","normal",null],
+  [833,"カムカメ","かむかめ","chewtle","water",null],
+  [834,"カジリガメ","かじりがめ","drednaw","water","rock"],
+  [835,"ワンパチ","わんぱち","yamper","electric",null],
+  [836,"パルスワン","ぱるすわん","boltund","electric",null],
+  [837,"タンドン","たんどん","rolycoly","rock",null],
+  [838,"トロッゴン","とろっごん","carkol","rock","fire"],
+  [839,"セキタンザン","せきたんざん","coalossal","rock","fire"],
+  [840,"カジッチュ","かじっちゅ","applin","grass","dragon"],
+  [841,"アップリュー","あっぷりゅー","flapple","grass","dragon"],
+  [842,"タルップル","たるっぷる","appletun","grass","dragon"],
+  [843,"スナヘビ","すなへび","silicobra","ground",null],
+  [844,"サダイジャ","さだいじゃ","sandaconda","ground",null],
+  [845,"ウッウ","うっう","cramorant","flying","water"],
+  [846,"サシカマス","さしかます","arrokuda","water",null],
+  [847,"カマスジョー","かますじょー","barraskewda","water",null],
+  [848,"エレズン","えれずん","toxel","electric","poison"],
+  [849,"ストリンダー","すとりんだー","toxtricity-amped","electric","poison"],
+  [850,"ヤクデ","やくで","sizzlipede","fire","bug"],
+  [851,"マルヤクデ","まるやくで","centiskorch","fire","bug"],
+  [852,"タタッコ","たたっこ","clobbopus","fighting",null],
+  [853,"オトスパス","おとすぱす","grapploct","fighting",null],
+  [854,"ヤバチャ","やばちゃ","sinistea","ghost",null],
+  [855,"ポットデス","ぽっとです","polteageist","ghost",null],
+  [856,"ミブリム","みぶりむ","hatenna","psychic",null],
+  [857,"テブリム","てぶりむ","hattrem","psychic",null],
+  [858,"ブリムオン","ぶりむおん","hatterene","psychic","fairy"],
+  [859,"ベロバー","べろばー","impidimp","dark","fairy"],
+  [860,"ギモー","ぎもー","morgrem","dark","fairy"],
+  [861,"オーロンゲ","おーろんげ","grimmsnarl","dark","fairy"],
+  [862,"タチフサグマ","たちふさぐま","obstagoon","dark","normal"],
+  [863,"ニャイキング","にゃいきんぐ","perrserker","steel",null],
+  [864,"サニゴーン","さにごーん","cursola","ghost",null],
+  [865,"ネギガナイト","ねぎがないと","sirfetchd","fighting",null],
+  [866,"バリコオル","ばりこおる","mr-rime","ice","psychic"],
+  [867,"デスバーン","ですばーん","runerigus","ground","ghost"],
+  [868,"マホミル","まほみる","milcery","fairy",null],
+  [869,"マホイップ","まほいっぷ","alcremie","fairy",null],
+  [870,"タイレーツ","たいれーつ","falinks","fighting",null],
+  [871,"バチンウニ","ばちんうに","pincurchin","electric",null],
+  [872,"ユキハミ","ゆきはみ","snom","ice","bug"],
+  [873,"モスノウ","もすのう","frosmoth","ice","bug"],
+  [874,"イシヘンジン","いしへんじん","stonjourner","rock",null],
+  [875,"コオリッポ","こおりっぽ","eiscue-ice","ice",null],
+  [876,"イエッサン","いえっさん","indeedee-male","psychic","normal"],
+  [877,"モルペコ","もるぺこ","morpeko-full-belly","electric","dark"],
+  [878,"ゾウドウ","ぞうどう","cufant","steel",null],
+  [879,"ダイオウドウ","だいおうどう","copperajah","steel",null],
+  [880,"パッチラゴン","ぱっちらごん","dracozolt","electric","dragon"],
+  [881,"パッチルドン","ぱっちるどん","arctozolt","electric","ice"],
+  [882,"ウオノラゴン","うおのらごん","dracovish","water","dragon"],
+  [883,"ウオチルドン","うおちるどん","arctovish","water","ice"],
+  [884,"ジュラルドン","じゅらるどん","duraludon","steel","dragon"],
+  [885,"ドラメシヤ","どらめしや","dreepy","dragon","ghost"],
+  [886,"ドロンチ","どろんち","drakloak","dragon","ghost"],
+  [887,"ドラパルト","どらぱると","dragapult","dragon","ghost"],
+  [888,"ザシアン","ざしあん","zacian","fairy",null],
+  [889,"ザマゼンタ","ざまぜんた","zamazenta","fighting",null],
+  [890,"ムゲンダイナ","むげんだいな","eternatus","poison","dragon"],
+  [891,"ダクマ","だくま","kubfu","fighting",null],
+  [892,"ウーラオス","うーらおす","urshifu-single-strike","fighting","dark"],
+  [893,"ザルード","ざるーど","zarude","dark","grass"],
+  [894,"レジエレキ","れじえれき","regieleki","electric",null],
+  [895,"レジドラゴ","れじどらご","regidrago","dragon",null],
+  [896,"ブリザポス","ぶりざぽす","glastrier","ice",null],
+  [897,"レイスポス","れいすぽす","spectrier","ghost",null],
+  [898,"バドレックス","ばどれっくす","calyrex","psychic","grass"],
+  [899,"アヤシシ","あやしし","wyrdeer","normal","psychic"],
+  [900,"バサギリ","ばさぎり","kleavor","bug","rock"],
+  [901,"ガチグマ","がちぐま","ursaluna","ground","normal"],
+  [902,"イダイトウ","いだいとう","basculegion-male","water","ghost"],
+  [903,"オオニューラ","おおにゅーら","sneasler","fighting","poison"],
+  [904,"ハリーマン","はりーまん","overqwil","dark","poison"],
+  [905,"ラブトロス","らぶとろす","enamorus-incarnate","fairy","flying"],
+  [906,"ニャオハ","にゃおは","sprigatito","grass",null],
+  [907,"ニャローテ","にゃろーて","floragato","grass",null],
+  [908,"マスカーニャ","ますかーにゃ","meowscarada","grass","dark"],
+  [909,"ホゲータ","ほげーた","fuecoco","fire",null],
+  [910,"アチゲータ","あちげーた","crocalor","fire",null],
+  [911,"ラウドボーン","らうどぼーん","skeledirge","fire","ghost"],
+  [912,"クワッス","くわっす","quaxly","water",null],
+  [913,"ウェルカモ","うぇるかも","quaxwell","water",null],
+  [914,"ウェーニバル","うぇーにばる","quaquaval","water","fighting"],
+  [915,"グルトン","ぐるとん","lechonk","normal",null],
+  [916,"パフュートン","ぱふゅーとん","oinkologne-male","normal",null],
+  [917,"タマンチュラ","たまんちゅら","tarountula","bug",null],
+  [918,"ワナイダー","わないだー","spidops","bug",null],
+  [919,"マメバッタ","まめばった","nymble","bug",null],
+  [920,"エクスレッグ","えくすれっぐ","lokix","bug","dark"],
+  [921,"パモ","ぱも","pawmi","electric",null],
+  [922,"パモット","ぱもっと","pawmo","electric","fighting"],
+  [923,"パーモット","ぱーもっと","pawmot","electric","fighting"],
+  [924,"ワッカネズミ","わっかねずみ","tandemaus","normal",null],
+  [925,"イッカネズミ","いっかねずみ","maushold-family-of-four","normal",null],
+  [926,"パピモッチ","ぱぴもっち","fidough","fairy",null],
+  [927,"バウッツェル","ばうっつぇる","dachsbun","fairy",null],
+  [928,"ミニーブ","みにーぶ","smoliv","grass","normal"],
+  [929,"オリーニョ","おりーにょ","dolliv","grass","normal"],
+  [930,"オリーヴァ","おりーゔぁ","arboliva","grass","normal"],
+  [931,"イキリンコ","いきりんこ","squawkabilly-green-plumage","normal","flying"],
+  [932,"コジオ","こじお","nacli","rock",null],
+  [933,"ジオヅム","じおづむ","naclstack","rock",null],
+  [934,"キョジオーン","きょじおーん","garganacl","rock",null],
+  [935,"カルボウ","かるぼう","charcadet","fire",null],
+  [936,"グレンアルマ","ぐれんあるま","armarouge","fire","psychic"],
+  [937,"ソウブレイズ","そうぶれいず","ceruledge","fire","ghost"],
+  [938,"ズピカ","ずぴか","tadbulb","electric",null],
+  [939,"ハラバリー","はらばりー","bellibolt","electric",null],
+  [940,"カイデン","かいでん","wattrel","electric","flying"],
+  [941,"タイカイデン","たいかいでん","kilowattrel","electric","flying"],
+  [942,"オラチフ","おらちふ","maschiff","dark",null],
+  [943,"マフィティフ","まふぃてぃふ","mabosstiff","dark",null],
+  [944,"シルシュルー","しるしゅるー","shroodle","poison","normal"],
+  [945,"タギングル","たぎんぐる","grafaiai","poison","normal"],
+  [946,"アノクサ","あのくさ","bramblin","grass","ghost"],
+  [947,"アノホラグサ","あのほらぐさ","brambleghast","grass","ghost"],
+  [948,"ノノクラゲ","ののくらげ","toedscool","ground","grass"],
+  [949,"リククラゲ","りくくらげ","toedscruel","ground","grass"],
+  [950,"ガケガニ","がけがに","klawf","rock",null],
+  [951,"カプサイジ","かぷさいじ","capsakid","grass",null],
+  [952,"スコヴィラン","すこゔぃらん","scovillain","grass","fire"],
+  [953,"シガロコ","しがろこ","rellor","bug",null],
+  [954,"ベラカス","べらかす","rabsca","bug","psychic"],
+  [955,"ヒラヒナ","ひらひな","flittle","psychic",null],
+  [956,"クエスパトラ","くえすぱとら","espathra","psychic",null],
+  [957,"カヌチャン","かぬちゃん","tinkatink","fairy","steel"],
+  [958,"ナカヌチャン","なかぬちゃん","tinkatuff","fairy","steel"],
+  [959,"デカヌチャン","でかぬちゃん","tinkaton","fairy","steel"],
+  [960,"ウミディグダ","うみでぃぐだ","wiglett","water",null],
+  [961,"ウミトリオ","うみとりお","wugtrio","water",null],
+  [962,"オトシドリ","おとしどり","bombirdier","flying","dark"],
+  [963,"ナミイルカ","なみいるか","finizen","water",null],
+  [964,"イルカマン","いるかまん","palafin-zero","water",null],
+  [965,"ブロロン","ぶろろん","varoom","steel","poison"],
+  [966,"ブロロローム","ぶろろろーむ","revavroom","steel","poison"],
+  [967,"モトトカゲ","もととかげ","cyclizar","dragon","normal"],
+  [968,"ミミズズ","みみずず","orthworm","steel",null],
+  [969,"キラーメ","きらーめ","glimmet","rock","poison"],
+  [970,"キラフロル","きらふろる","glimmora","rock","poison"],
+  [971,"ボチ","ぼち","greavard","ghost",null],
+  [972,"ハカドッグ","はかどっぐ","houndstone","ghost",null],
+  [973,"カラミンゴ","からみんご","flamigo","flying","fighting"],
+  [974,"アルクジラ","あるくじら","cetoddle","ice",null],
+  [975,"ハルクジラ","はるくじら","cetitan","ice",null],
+  [976,"ミガルーサ","みがるーさ","veluza","water","psychic"],
+  [977,"ヘイラッシャ","へいらっしゃ","dondozo","water",null],
+  [978,"シャリタツ","しゃりたつ","tatsugiri-curly","dragon","water"],
+  [979,"コノヨザル","このよざる","annihilape","fighting","ghost"],
+  [980,"ドオー","どおー","clodsire","poison","ground"],
+  [981,"リキキリン","りききりん","farigiraf","normal","psychic"],
+  [982,"ノココッチ","のここっち","dudunsparce-two-segment","normal",null],
+  [983,"ドドゲザン","どどげざん","kingambit","dark","steel"],
+  [984,"イダイナキバ","いだいなきば","great-tusk","ground","fighting"],
+  [985,"サケブシッポ","さけぶしっぽ","scream-tail","fairy","psychic"],
+  [986,"アラブルタケ","あらぶるたけ","brute-bonnet","grass","dark"],
+  [987,"ハバタクカミ","はばたくかみ","flutter-mane","ghost","fairy"],
+  [988,"チヲハウハネ","ちをはうはね","slither-wing","bug","fighting"],
+  [989,"スナノケガワ","すなのけがわ","sandy-shocks","electric","ground"],
+  [990,"テツノワダチ","てつのわだち","iron-treads","ground","steel"],
+  [991,"テツノツツミ","てつのつつみ","iron-bundle","ice","water"],
+  [992,"テツノカイナ","てつのかいな","iron-hands","fighting","electric"],
+  [993,"テツノコウベ","てつのこうべ","iron-jugulis","dark","flying"],
+  [994,"テツノドクガ","てつのどくが","iron-moth","fire","poison"],
+  [995,"テツノイバラ","てつのいばら","iron-thorns","rock","electric"],
+  [996,"セビエ","せびえ","frigibax","dragon","ice"],
+  [997,"セゴール","せごーる","arctibax","dragon","ice"],
+  [998,"セグレイブ","せぐれいぶ","baxcalibur","dragon","ice"],
+  [999,"コレクレー","これくれー","gimmighoul","ghost",null],
+  [1000,"サーフゴー","さーふごー","gholdengo","steel","ghost"],
+  [1001,"チオンジェン","ちおんじぇん","wo-chien","dark","grass"],
+  [1002,"パオジアン","ぱおじあん","chien-pao","dark","ice"],
+  [1003,"ディンルー","でぃんるー","ting-lu","dark","ground"],
+  [1004,"イーユイ","いーゆい","chi-yu","dark","fire"],
+  [1005,"トドロクツキ","とどろくつき","roaring-moon","dragon","dark"],
+  [1006,"テツノブジン","てつのぶじん","iron-valiant","fairy","fighting"],
+  [1007,"コライドン","こらいどん","koraidon","fighting","dragon"],
+  [1008,"ミライドン","みらいどん","miraidon","electric","dragon"],
+  [1009,"ウネルミナモ","うねるみなも","walking-wake","water","dragon"],
+  [1010,"テツノイサハ","てつのいさは","iron-leaves","grass","psychic"],
+  [1011,"カミッチュ","かみっちゅ","dipplin","grass","dragon"],
+  [1012,"チャデス","ちゃです","poltchageist","grass","ghost"],
+  [1013,"ヤバソチャ","やばそちゃ","sinistcha","grass","ghost"],
+  [1014,"イイネイヌ","いいねいぬ","okidogi","poison","fighting"],
+  [1015,"マシマシラ","ましましら","munkidori","poison","psychic"],
+  [1016,"キチキギス","きちきぎす","fezandipiti","poison","fairy"],
+  [1017,"オーガポン","おーがぽん","ogerpon","grass",null],
+  [1018,"ブリジュラス","ぶりじゅらす","archaludon","steel","dragon"],
+  [1019,"カミツオロチ","かみつおろち","hydrapple","grass","dragon"],
+  [1020,"ウガツホムラ","うがつほむら","gouging-fire","fire","dragon"],
+  [1021,"タケルライコ","たけるらいこ","raging-bolt","electric","dragon"],
+  [1022,"テツノイワオ","てつのいわお","iron-boulder","rock","psychic"],
+  [1023,"テツノカシラ","てつのかしら","iron-crown","steel","psychic"],
+  [1024,"テラパゴス","てらぱごす","terapagos","normal",null],
+  [1025,"モモワロウ","ももわろう","pecharunt","poison","ghost"]
+];
+
+let selected = [];
+let selectedPokemon = null;
+
+function renderTypeGrid() {
+  const grid = document.getElementById('typeGrid');
+  grid.innerHTML = '';
+  Object.entries(types).forEach(([key, t]) => {
+    const btn = document.createElement('button');
+    btn.className = 'type-btn';
+    btn.style.background = t.soft;
+    if (selected.includes(key)) btn.classList.add('selected');
+    if (selected.length >= 2 && !selected.includes(key)) btn.classList.add('disabled');
+    btn.innerHTML = `
+      <span class="type-icon" style="background:${t.color}">${typeIcons[key]}</span>
+      <span class="type-label">${t.name}</span>
+    `;
+    btn.onclick = () => {
+      selectedPokemon = null;
+      document.getElementById('searchBox').value = '';
+      document.getElementById('clearBtn').classList.remove('show');
+      toggleType(key);
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function toggleType(key) {
+  if (selected.includes(key)) {
+    selected = selected.filter(t => t !== key);
+  } else if (selected.length < 2) {
+    selected.push(key);
+  }
+  renderTypeGrid();
+  renderSelectedTags();
+  renderResults();
+}
+
+function renderSelectedTags() {
+  const wrap = document.getElementById('selectedTags');
+  if (selected.length === 0) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = selected.map(k =>
+    `<span class="type-tag" style="background:${types[k].color}">
+       <span class="type-icon-mini">${typeIcons[k]}</span>${types[k].name}
+     </span>`
+  ).join('');
+}
+
+const searchBox = document.getElementById('searchBox');
+const suggestions = document.getElementById('suggestions');
+const clearBtn = document.getElementById('clearBtn');
+
+searchBox.addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  if (q) clearBtn.classList.add('show'); else clearBtn.classList.remove('show');
+  if (!q) { suggestions.classList.remove('show'); return; }
+
+  const hits = pokemons.filter(p => {
+    const [no, ja, hira, en] = p;
+    return String(no) === q ||
+           String(no).padStart(3, '0').includes(q.padStart(3, '0')) ||
+           ja.toLowerCase().includes(q) ||
+           hira.includes(q) ||
+           en.includes(q);
+  }).slice(0, 30);
+
+  if (hits.length === 0) {
+    suggestions.innerHTML = '<div class="no-result">該当なし</div>';
+    suggestions.classList.add('show');
+    return;
+  }
+
+  suggestions.innerHTML = hits.map(p => {
+    const [no, ja, hira, en, t1, t2] = p;
+    const tagHtml = [t1, t2].filter(Boolean).map(t =>
+      `<span class="mini-tag" style="background:${types[t].color}">${types[t].name}</span>`
+    ).join('');
+    return `<div class="suggest-item" data-no="${no}">
+      <span class="suggest-no">#${String(no).padStart(3, '0')}</span>
+      <span class="suggest-name">${ja}</span>
+      <span class="suggest-types">${tagHtml}</span>
+    </div>`;
+  }).join('');
+  suggestions.classList.add('show');
+
+  suggestions.querySelectorAll('.suggest-item').forEach(item => {
+    item.onclick = () => {
+      const no = parseInt(item.dataset.no);
+      const p = pokemons.find(x => x[0] === no);
+      if (p) selectPokemon(p);
+    };
+  });
+});
+
+clearBtn.onclick = () => {
+  searchBox.value = '';
+  clearBtn.classList.remove('show');
+  suggestions.classList.remove('show');
+  selectedPokemon = null;
+  selected = [];
+  renderTypeGrid();
+  renderSelectedTags();
+  renderResults();
+};
+
+function selectPokemon(p) {
+  const [no, ja, hira, en, t1, t2] = p;
+  selectedPokemon = p;
+  selected = [t1];
+  if (t2) selected.push(t2);
+  searchBox.value = ja;
+  clearBtn.classList.add('show');
+  suggestions.classList.remove('show');
+  renderTypeGrid();
+  renderSelectedTags();
+  renderResults();
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-wrap') && !e.target.closest('#suggestions')) {
+    suggestions.classList.remove('show');
+  }
+});
+
+function renderResults() {
+  const wrap = document.getElementById('resultsWrap');
+  if (selected.length === 0) {
+    wrap.innerHTML = `
+      <div class="info-banner">
+        <span class="info-icon">i</span>
+        <span>名前検索またはタイプ選択のどちらかを入力すると、<br>下に効果抜群のタイプが表示されます。</span>
+      </div>`;
+    return;
+  }
+
+  const damage = {};
+  Object.keys(types).forEach(attacker => {
+    let mult = 1;
+    selected.forEach(defender => {
+      const v = chart[attacker]?.[defender];
+      if (v !== undefined) mult *= v;
+    });
+    damage[attacker] = mult;
+  });
+
+  const groups = { quad: [], double: [], half: [], quarter: [], zero: [] };
+  Object.entries(damage).forEach(([k, v]) => {
+    if (v === 4) groups.quad.push(k);
+    else if (v === 2) groups.double.push(k);
+    else if (v === 0.5) groups.half.push(k);
+    else if (v === 0.25) groups.quarter.push(k);
+    else if (v === 0) groups.zero.push(k);
+  });
+
+  let html = '<div class="card">';
+  const attackTypes = [...groups.quad, ...groups.double];
+  if (attackTypes.length > 0) {
+    html += `<div class="card-title"><span class="icon">🎯</span>効果抜群のタイプ</div>`;
+    html += '<div class="result-cards">';
+    groups.quad.forEach(k => { html += renderResultCard(k, 4); });
+    groups.double.forEach(k => { html += renderResultCard(k, 2); });
+    html += '</div>';
+    html += `<div class="tip-banner">💡 <span>上記のタイプの技は、選択した相手に対して効果抜群です！</span></div>`;
+  } else {
+    html += `<div class="card-title"><span class="icon">🎯</span>効果抜群のタイプ</div>`;
+    html += '<div class="empty-state">効果抜群のタイプはありません</div>';
+  }
+  html += '</div>';
+
+  if (groups.half.length || groups.quarter.length || groups.zero.length) {
+    html += '<div class="card">';
+    html += `<div class="card-title"><span class="icon">🛡</span>抵抗・無効のタイプ</div>`;
+    html += '<div class="result-cards">';
+    groups.quarter.forEach(k => { html += renderResultCard(k, 0.25); });
+    groups.half.forEach(k => { html += renderResultCard(k, 0.5); });
+    groups.zero.forEach(k => { html += renderResultCard(k, 0); });
+    html += '</div>';
+    if (groups.zero.length) {
+      html += `<div class="tip-banner block">🚫 <span>無効タイプの技は当たりません。打たないよう注意！</span></div>`;
+    } else {
+      html += `<div class="tip-banner shield">🛡 <span>これらのタイプの技は半減されます。打たない方が無難です。</span></div>`;
+    }
+    html += '</div>';
+  }
+
+  wrap.innerHTML = html;
+}
+
+function renderResultCard(typeKey, mult) {
+  const t = types[typeKey];
+  const multText = mult === 0 ? '×0' : `×${mult}`;
+
+  let badgeText = '', badgeBg = '', badgeColor = '';
+  if (mult === 4)         { badgeText = '効果4倍！'; badgeBg = '#fff'; badgeColor = '#d32f2f'; }
+  else if (mult === 2)    { badgeText = '効果2倍';   badgeBg = '#fff'; badgeColor = '#f57c00'; }
+  else if (mult === 0.5)  { badgeText = '半減';       badgeBg = '#fff'; badgeColor = '#1976d2'; }
+  else if (mult === 0.25) { badgeText = '1/4減';     badgeBg = '#fff'; badgeColor = '#0d47a1'; }
+  else if (mult === 0)    { badgeText = '無効';       badgeBg = '#222'; badgeColor = '#fff'; }
+
+  const cardClass = mult === 4 ? 'quad' : (mult === 0 ? 'zero' : '');
+  const imgSrc = `${IMAGE_PATH}${typeKey}${IMAGE_EXT}`;
+
+  return `<div class="result-card ${cardClass}">
+    <img class="result-card-image" src="${imgSrc}" alt="${t.name}"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="result-card-fallback" style="--fallback-bg:${t.color}">${typeIcons[typeKey]}</div>
+    <div class="result-card-badge" style="--badge-bg:${badgeBg};--badge-color:${badgeColor}">${badgeText}</div>
+    <div class="result-card-overlay">
+      <div class="result-card-name">${t.name}</div>
+      <div class="result-card-mult">${multText}</div>
+    </div>
+  </div>`;
+}
+
+renderTypeGrid();
+renderSelectedTags();
+renderResults();
+</script>
+
+</body>
+</html>
